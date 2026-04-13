@@ -13,6 +13,8 @@ export default function UploadCSV() {
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState({ total: 0, inserted: 0, updated: 0, errors: 0 });
   const [errorMessage, setErrorMessage] = useState('');
+  const [lastDebugError, setLastDebugError] = useState(null);
+
 
   const onDragOver = (e) => {
     e.preventDefault();
@@ -44,6 +46,8 @@ export default function UploadCSV() {
 
     setStatus('parsing');
     setResults({ total: 0, inserted: 0, updated: 0, errors: 0 });
+    setLastDebugError(null);
+
     
     Papa.parse(file, {
       header: true,
@@ -57,15 +61,27 @@ export default function UploadCSV() {
         }
 
         setStatus('uploading');
-        setResults(prev => ({ ...prev, total: rows.length }));
+        
+        // De-duplicate rows by Telefono to avoid "ON CONFLICT" errors in Postgres
+        const seen = new Set();
+        const uniqueRows = rows.filter(row => {
+          const tel = row['Telefono']?.toString().trim();
+          if (!tel || seen.has(tel)) return false;
+          seen.add(tel);
+          return true;
+        });
+
+        const duplicateCount = rows.length - uniqueRows.length;
+        setResults(prev => ({ ...prev, total: uniqueRows.length }));
         
         // Process in batches of 100 to avoid Supabase/Network limits
         const batchSize = 100;
         let successCount = 0;
         let errorCount = 0;
 
-        for (let i = 0; i < rows.length; i += batchSize) {
-          const batch = rows.slice(i, i + batchSize);
+        for (let i = 0; i < uniqueRows.length; i += batchSize) {
+          const batch = uniqueRows.slice(i, i + batchSize);
+
           
           // Map CSV columns to Database columns
           // Expected columns based on user sample: Fecha, Telefono, Nombre Sucursal, Cantidad de pedidos
@@ -84,14 +100,17 @@ export default function UploadCSV() {
             if (error) {
               console.error('Batch error:', error);
               errorCount += formattedBatch.length;
+              if (!lastDebugError) setLastDebugError(error.message);
             } else {
               successCount += formattedBatch.length;
             }
           }
+
           
-          const currentProgress = Math.round(((i + batchSize) / rows.length) * 100);
+          const currentProgress = Math.round(((i + batchSize) / uniqueRows.length) * 100);
           setProgress(Math.min(currentProgress, 100));
         }
+
 
         setResults(prev => ({ ...prev, inserted: successCount, errors: errorCount }));
         setStatus('success');
@@ -155,6 +174,21 @@ export default function UploadCSV() {
               </div>
             )}
           </div>
+
+          {lastDebugError && (
+            <div style={{ 
+              marginBottom: '2rem', 
+              padding: '1rem', 
+              background: 'rgba(218, 54, 51, 0.05)', 
+              borderRadius: 'var(--radius-md)', 
+              border: '1px solid rgba(218, 54, 51, 0.2)',
+              textAlign: 'left'
+            }}>
+              <p style={{ color: '#da3633', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.25rem' }}>Detalle técnico del error:</p>
+              <code style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{lastDebugError}</code>
+            </div>
+          )}
+
           <button className="btn-primary" onClick={() => { setStatus('idle'); setFile(null); }}>
             Cargar otro archivo
           </button>

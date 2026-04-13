@@ -20,7 +20,9 @@ export default function Clientes() {
   const [sucursales, setSucursales] = useState([]);
   const [selectedSucursal, setSelectedSucursal] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedPhones, setSelectedPhones] = useState([]);
+
   
   // Pagination
   const [page, setPage] = useState(0);
@@ -31,8 +33,12 @@ export default function Clientes() {
   }, []);
 
   useEffect(() => {
-    fetchClientes();
-  }, [selectedSucursal, dateFrom, page]);
+    const timer = setTimeout(() => {
+      fetchClientes();
+    }, 300); // Debounce search
+    return () => clearTimeout(timer);
+  }, [selectedSucursal, dateFrom, searchQuery, page]);
+
 
   async function fetchSucursales() {
     const { data, error } = await supabase
@@ -60,6 +66,11 @@ export default function Clientes() {
       if (dateFrom) {
         query = query.gte('fecha_ultimo_pedido', dateFrom);
       }
+
+      if (searchQuery) {
+        query = query.ilike('telefono', `%${searchQuery}%`);
+      }
+
 
       const { data, count, error } = await query
         .range(page * pageSize, (page + 1) * pageSize - 1)
@@ -106,9 +117,22 @@ export default function Clientes() {
         )}
       </header>
 
-      {/* Filters */}
+      {/* Filters & Search */}
       <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 2, minWidth: '300px', position: 'relative' }}>
+          <Search size={18} color="var(--text-secondary)" style={{ position: 'absolute', left: '12px' }} />
+          <input 
+            type="text" 
+            className="input-field" 
+            placeholder="Buscar por número de teléfono..." 
+            style={{ paddingLeft: '40px', width: '100%' }}
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+          />
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '200px' }}>
+
           <Store size={18} color="var(--text-secondary)" />
           <select 
             className="input-field" 

@@ -106,7 +106,7 @@ export default function Settings() {
               />
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Encuéntralo en el panel de Meta para Desarrolladores > WhatsApp > Configuración.
+              Encuéntralo en el panel de Meta para Desarrolladores &gt; WhatsApp &gt; Configuración.
             </p>
           </div>
 

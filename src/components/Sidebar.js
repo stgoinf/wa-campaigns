@@ -1,6 +1,7 @@
 "use client";
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Users, 
   Upload, 
