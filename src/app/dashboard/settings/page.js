@@ -1,4 +1,6 @@
 "use client";
+import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { testWhatsAppConnection } from './actions';
 import { Save, Key, Shield, Info, Smartphone, ExternalLink, Activity, CheckCircle2 } from 'lucide-react';
 
