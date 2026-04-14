@@ -69,6 +69,11 @@ export default function BulkSend() {
 
     setSendingTest(true);
     try {
+      const { data: config } = await supabase.from('configuracion').select('*');
+      const phoneNumberId = config.find(c => c.key === 'WABA_PHONE_NUMBER_ID')?.value;
+
+      if (!phoneNumberId) throw new Error('Phone Number ID no configurado');
+
       const components = [];
       if (headerImageUrl) {
         components.push({
@@ -77,13 +82,12 @@ export default function BulkSend() {
         });
       }
 
-      const phoneNumberId = accountStatus.data?.id || ''; // We need the ID for sending
-
       const res = await sendTemplateMessage({
         phone: testPhoneNumber.replace(/\+/g, '').replace(/\s/g, ''),
         templateName: selectedTemplate.name,
         languageCode: selectedTemplate.language,
-        components: components
+        components: components,
+        phoneNumberId: phoneNumberId
       });
 
       if (res.success) {
@@ -288,33 +292,6 @@ export default function BulkSend() {
               )}
             </div>
 
-            {/* Test Individual Message */}
-            {selectedTemplate && (
-              <div style={{ marginTop: '1.5rem', padding: '1.25rem', background: 'rgba(47, 129, 247, 0.05)', borderRadius: '12px', border: '1px dashed var(--accent-color)' }}>
-                <h4 style={{ fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Smartphone size={16} />
-                  Enviar Prueba Individual
-                </h4>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="Ej: 18095551234" 
-                    value={testPhoneNumber}
-                    onChange={(e) => setTestPhoneNumber(e.target.value)}
-                    style={{ flex: 1, fontSize: '0.8rem', padding: '8px' }}
-                  />
-                  <button 
-                    className="btn-primary" 
-                    onClick={sendTestMessage}
-                    disabled={sendingTest || !testPhoneNumber}
-                    style={{ whiteSpace: 'nowrap', fontSize: '0.8rem', padding: '8px 12px' }}
-                  >
-                    {sendingTest ? 'Enviando...' : 'Probar ahora'}
-                  </button>
-                </div>
-              </div>
-            )}
           </section>
 
           {/* Step 2: Media Header */}
@@ -342,7 +319,16 @@ export default function BulkSend() {
                   }}
                 >
                   {headerImageUrl ? (
-                    <img src={headerImageUrl} alt="Header" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img 
+                      src={headerImageUrl} 
+                      alt="Header" 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.target.onerror = null; 
+                        console.log("Error cargando imagen, reintentando...");
+                      }}
+                    />
                   ) : (
                     <ImageIcon size={32} color="var(--text-secondary)" />
                   )}
@@ -395,6 +381,43 @@ export default function BulkSend() {
                 />
               </div>
             </div>
+          </section>
+          
+          {/* Step 3: Test individual message */}
+          <section className="glass-panel" style={{ padding: '2rem', border: `1px solid ${selectedTemplate ? 'var(--accent-color)' : 'var(--border-color)'}`, background: selectedTemplate ? 'rgba(47, 129, 247, 0.02)' : 'transparent' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <Smartphone size={24} color={selectedTemplate ? 'var(--accent-color)' : 'var(--text-secondary)'} />
+              <h2 style={{ fontSize: '1.2rem', fontWeight: '600' }}>3. Probar Plantilla</h2>
+            </div>
+            {!selectedTemplate ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                Primero selecciona una plantilla arriba para habilitar la prueba.
+              </p>
+            ) : (
+              <div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                  Ingresa tu número para recibir una prueba real en tu WhatsApp antes de enviar masivamente.
+                </p>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Ej: 18095551234" 
+                    value={testPhoneNumber}
+                    onChange={(e) => setTestPhoneNumber(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <button 
+                    className="btn-primary" 
+                    onClick={sendTestMessage}
+                    disabled={sendingTest || !testPhoneNumber}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {sendingTest ? 'Enviando...' : 'Enviar Prueba Ahora'}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
         </div>
