@@ -98,12 +98,16 @@ export default function BulkSend() {
         });
       }
 
+      // Fetch Phone Number ID from config
+      const { data: configRows } = await supabase.from('configuracion').select('value').eq('key', 'WABA_PHONE_NUMBER_ID').single();
+      const phoneNumberId = configRows?.value;
+
       const res = await sendTemplateMessage({
         phone: client.telefono,
         templateName: selectedTemplate.name,
         languageCode: selectedTemplate.language,
         components: components,
-        phoneNumberId: 'tu_phone_number_id_aqui' // Should be in config too
+        phoneNumberId: phoneNumberId // Used dynamic ID from DB
       });
 
       // Update progress
