@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { getTemplates, sendTemplateMessage } from './actions';
 import { 
@@ -31,7 +31,7 @@ export default function BulkSend() {
   const [timeStats, setTimeStats] = useState({ elapsed: 0, remaining: 0 });
 
   // Ref to track cancellation
-  const cancelRef = React.useRef(false);
+  const cancelRef = useRef(false);
 
   const formatTime = (seconds) => {
     if (!seconds || seconds === Infinity) return 'Calculando...';
