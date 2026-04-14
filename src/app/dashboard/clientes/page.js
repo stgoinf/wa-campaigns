@@ -17,6 +17,7 @@ export default function Clientes() {
 
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
   const [sucursales, setSucursales] = useState([]);
   const [selectedSucursal, setSelectedSucursal] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
@@ -78,6 +79,7 @@ export default function Clientes() {
 
       if (error) throw error;
       setClientes(data || []);
+      setTotalCount(count || 0);
     } catch (error) {
       console.error('Error fetching customers:', error.message);
     } finally {
@@ -105,7 +107,20 @@ export default function Clientes() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: '700', marginBottom: '0.25rem' }}>Base de Clientes</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 style={{ fontSize: '1.8rem', fontWeight: '700', marginBottom: '0.25rem' }}>Base de Clientes</h1>
+            <span style={{ 
+              background: 'rgba(47, 129, 247, 0.1)', 
+              color: 'var(--accent-color)', 
+              padding: '4px 12px', 
+              borderRadius: '20px', 
+              fontSize: '0.85rem', 
+              fontWeight: '700',
+              marginTop: '0.5rem'
+            }}>
+              {totalCount.toLocaleString()} teléfonos
+            </span>
+          </div>
           <p style={{ color: 'var(--text-secondary)' }}>Filtra y selecciona clientes para tus campañas de WhatsApp.</p>
         </div>
         
@@ -227,7 +242,7 @@ export default function Clientes() {
         {/* Pagination Placeholder */}
         <div style={{ padding: '1rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            Mostrando {clientes.length} resultados
+            Mostrando <strong>{clientes.length}</strong> de <strong>{totalCount}</strong> teléfonos encontrados
           </p>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button 
