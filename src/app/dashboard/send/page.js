@@ -257,47 +257,75 @@ export default function BulkSend() {
               <h2 style={{ fontSize: '1.2rem', fontWeight: '600' }}>2. Header de Imagen (Opcional)</h2>
             </div>
             
-            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-              <div 
-                style={{ 
-                  width: '120px', 
-                  height: '120px', 
-                  background: 'var(--surface-hover)', 
-                  borderRadius: 'var(--radius-md)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '1px dashed var(--border-color)',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
-              >
-                {headerImageUrl ? (
-                  <img src={headerImageUrl} alt="Header" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <ImageIcon size={32} color="var(--text-secondary)" />
-                )}
-              </div>
-              
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                  Si tu plantilla soporta un header de imagen, sube el archivo aquí. Se generará una URL pública automáticamente.
-                </p>
-                <input 
-                  type="file" 
-                  id="headerUpload" 
-                  hidden 
-                  accept="image/*" 
-                  onChange={handleImageUpload} 
-                />
-                <button 
-                  className="btn-primary" 
-                  style={{ background: 'var(--surface-hover)', color: 'white', border: '1px solid var(--border-color)' }}
-                  onClick={() => document.getElementById('headerUpload').click()}
-                  disabled={uploadingImage}
+            <div style={{ display: 'grid', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                <div 
+                  style={{ 
+                    width: '120px', 
+                    height: '120px', 
+                    background: 'var(--surface-hover)', 
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid var(--border-color)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    flexShrink: 0
+                  }}
                 >
-                  {uploadingImage ? 'Subiendo...' : 'Subir Imagen'}
-                </button>
+                  {headerImageUrl ? (
+                    <img src={headerImageUrl} alt="Header" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <ImageIcon size={32} color="var(--text-secondary)" />
+                  )}
+                </div>
+                
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                    Si tu plantilla soporta un header de imagen, sube un archivo o pega una URL pública.
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input 
+                      type="file" 
+                      id="headerUpload" 
+                      hidden 
+                      accept="image/*" 
+                      onChange={handleImageUpload} 
+                    />
+                    <button 
+                      className="btn-primary" 
+                      style={{ background: 'var(--surface-hover)', color: 'white', border: '1px solid var(--border-color)', fontSize: '0.8rem', padding: '8px 16px' }}
+                      onClick={() => document.getElementById('headerUpload').click()}
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? 'Subiendo...' : 'Subir Archivo'}
+                    </button>
+                    {headerImageUrl && (
+                      <button 
+                        className="btn-secondary" 
+                        style={{ fontSize: '0.8rem', padding: '8px 16px', color: '#da3633', border: '1px solid #da3633' }}
+                        onClick={() => setHeaderImageUrl('')}
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-secondary)' }}>
+                  O pega aquí la URL de la imagen:
+                </label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="https://ejemplo.com/imagen.jpg" 
+                  value={headerImageUrl}
+                  onChange={(e) => setHeaderImageUrl(e.target.value)}
+                  style={{ fontSize: '0.85rem' }}
+                />
               </div>
             </div>
           </section>
