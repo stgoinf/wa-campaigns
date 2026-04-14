@@ -31,6 +31,8 @@ export default function BulkSend() {
   const [sendProgress, setSendProgress] = useState({ total: 0, current: 0, success: 0, failed: 0 });
   const [timeStats, setTimeStats] = useState({ elapsed: 0, remaining: 0 });
   const [accountStatus, setAccountStatus] = useState({ loading: true, data: null, error: null });
+  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
 
   // Ref to track cancellation
   const cancelRef = useRef(false);
@@ -56,6 +58,43 @@ export default function BulkSend() {
       setAccountStatus({ loading: false, data: res.data, error: null });
     } else {
       setAccountStatus({ loading: false, data: null, error: res.error });
+    }
+  }
+
+  async function sendTestMessage() {
+    if (!selectedTemplate || !testPhoneNumber) {
+      alert('Por favor selecciona una plantilla e ingresa un número de prueba.');
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      const components = [];
+      if (headerImageUrl) {
+        components.push({
+          type: "header",
+          parameters: [{ type: "image", image: { link: headerImageUrl } }]
+        });
+      }
+
+      const phoneNumberId = accountStatus.data?.id || ''; // We need the ID for sending
+
+      const res = await sendTemplateMessage({
+        phone: testPhoneNumber.replace(/\+/g, '').replace(/\s/g, ''),
+        templateName: selectedTemplate.name,
+        languageCode: selectedTemplate.language,
+        components: components
+      });
+
+      if (res.success) {
+        alert('✅ Mensaje de prueba enviado con éxito a ' + testPhoneNumber);
+      } else {
+        throw new Error(res.error);
+      }
+    } catch (error) {
+      alert('❌ Error en prueba: ' + error.message);
+    } finally {
+      setSendingTest(false);
     }
   }
 
@@ -248,6 +287,34 @@ export default function BulkSend() {
                 ))
               )}
             </div>
+
+            {/* Test Individual Message */}
+            {selectedTemplate && (
+              <div style={{ marginTop: '1.5rem', padding: '1.25rem', background: 'rgba(47, 129, 247, 0.05)', borderRadius: '12px', border: '1px dashed var(--accent-color)' }}>
+                <h4 style={{ fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Smartphone size={16} />
+                  Enviar Prueba Individual
+                </h4>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Ej: 18095551234" 
+                    value={testPhoneNumber}
+                    onChange={(e) => setTestPhoneNumber(e.target.value)}
+                    style={{ flex: 1, fontSize: '0.8rem', padding: '8px' }}
+                  />
+                  <button 
+                    className="btn-primary" 
+                    onClick={sendTestMessage}
+                    disabled={sendingTest || !testPhoneNumber}
+                    style={{ whiteSpace: 'nowrap', fontSize: '0.8rem', padding: '8px 12px' }}
+                  >
+                    {sendingTest ? 'Enviando...' : 'Probar ahora'}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Step 2: Media Header */}
