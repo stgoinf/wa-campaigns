@@ -27,7 +27,6 @@ export default function Sidebar() {
   const baseMenuItems = [
     { label: 'Dashboard', icon: <PieChart size={20} />, href: '/dashboard' },
     { label: 'Clientes', icon: <Users size={20} />, href: '/dashboard/clientes' },
-    { label: 'Cargar CSV', icon: <Upload size={20} />, href: '/dashboard/upload' },
     { label: 'Envíos', icon: <Send size={20} />, href: '/dashboard/send' },
     { label: 'Configuración', icon: <Settings size={20} />, href: '/dashboard/settings' },
   ];

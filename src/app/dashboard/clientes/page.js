@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import Papa from 'papaparse';
 import { 
   Search, 
   Filter, 
@@ -9,7 +10,14 @@ import {
   MessageSquare, 
   ChevronLeft, 
   ChevronRight,
-  UserCheck
+  UserCheck,
+  Upload,
+  FileText,
+  X,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  ArrowRight
 } from 'lucide-react';
 
 export default function Clientes() {
@@ -23,6 +31,34 @@ export default function Clientes() {
   const [dateFrom, setDateFrom] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPhones, setSelectedPhones] = useState([]);
+  
+  // Import CSV Stats
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importStep, setImportStep] = useState(1); // 1: Upload, 2: Mapping, 3: Success
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [csvRows, setCsvRows] = useState([]);
+  const [mapping, setMapping] = useState({
+    telefono: '',
+    nombre_sucursal: '',
+    fecha_ultimo_pedido: '',
+    cantidad_pedidos: ''
+  });
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStats, setImportStats] = useState({ total: 0, success: 0, error: 0 });
+
+  const normalizePhone = (phone) => {
+    if (!phone) return '';
+    // Remove non-numeric
+    let cleaned = phone.toString().replace(/\D/g, '');
+    
+    // If it has 10 digits (e.g. 8098207141), prepend 1
+    if (cleaned.length === 10) {
+      cleaned = '1' + cleaned;
+    }
+    
+    // If it's already 11 and starts with 1, keep it (like 18098207141)
+    return cleaned;
+  };
 
   
   // Pagination
@@ -120,6 +156,14 @@ export default function Clientes() {
             }}>
               {totalCount.toLocaleString()} teléfonos
             </span>
+            <button 
+              className="btn-primary" 
+              onClick={() => { setImportStep(1); setShowImportModal(true); }}
+              style={{ marginLeft: '1rem', gap: '0.5rem', height: 'fit-content', alignSelf: 'center', padding: '10px 16px' }}
+            >
+              <Upload size={18} />
+              Cargar Clientes
+            </button>
           </div>
           <p style={{ color: 'var(--text-secondary)' }}>Filtra y selecciona clientes para tus campañas de WhatsApp.</p>
         </div>
@@ -269,6 +313,155 @@ export default function Clientes() {
           background-color: rgba(255, 255, 255, 0.02);
         }
       `}</style>
+
+      {/* Import CSV Modal */}
+      {showImportModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: '2rem'
+        }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '600px', padding: '2.5rem', position: 'relative' }}>
+            <button 
+              onClick={() => setShowImportModal(false)}
+              style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+            >
+              <X size={24} />
+            </button>
+
+            {importStep === 1 && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ background: 'var(--surface-hover)', width: '64px', height: '64px', borderRadius: '50%', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-color)' }}>
+                  <Upload size={32} />
+                </div>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Subir Archivo CSV</h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Selecciona tu base de datos para mapear las columnas.</p>
+                
+                <input 
+                  type="file" 
+                  accept=".csv" 
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      Papa.parse(file, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                          setCsvHeaders(results.meta.fields);
+                          setCsvRows(results.data);
+                          setImportStep(2);
+                        }
+                      });
+                    }
+                  }}
+                  id="csv-upload"
+                  hidden
+                />
+                <button 
+                  className="btn-primary" 
+                  onClick={() => document.getElementById('csv-upload').click()}
+                  style={{ width: '100%', padding: '15px' }}
+                >
+                  Seleccionar CSV
+                </button>
+              </div>
+            )}
+
+            {importStep === 2 && (
+              <div>
+                <h2 style={{ fontSize: '1.3rem', marginBottom: '1.5rem' }}>Relacionar Columnas</h2>
+                <div style={{ display: 'grid', gap: '1.5rem', marginBottom: '2rem' }}>
+                  {[
+                    { key: 'telefono', label: '📞 Teléfono (Obligatorio)', hint: 'Se guardará como 1809XXXXXXX' },
+                    { key: 'nombre_sucursal', label: '🏪 Sucursal', hint: 'Nombre del local' },
+                    { key: 'fecha_ultimo_pedido', label: '📅 Último Pedido', hint: 'Fecha de la compra' },
+                    { key: 'cantidad_pedidos', label: '🔢 Total Pedidos', hint: 'Número de compras' }
+                  ].map(field => (
+                    <div key={field.key}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+                        {field.label}
+                      </label>
+                      <select 
+                        className="input-field"
+                        style={{ width: '100%' }}
+                        value={mapping[field.key]}
+                        onChange={(e) => setMapping({...mapping, [field.key]: e.target.value})}
+                      >
+                        <option value="">Selecciona columna...</option>
+                        {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{field.hint}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button className="btn-secondary" onClick={() => setImportStep(1)} style={{ flex: 1 }}>Atrás</button>
+                  <button 
+                    className="btn-primary" 
+                    disabled={!mapping.telefono || isImporting}
+                    style={{ flex: 2 }}
+                    onClick={async () => {
+                      setIsImporting(true);
+                      let success = 0;
+                      let error = 0;
+                      
+                      // Process in batches
+                      const batchSize = 100;
+                      for (let i = 0; i < csvRows.length; i += batchSize) {
+                        const batch = csvRows.slice(i, i + batchSize);
+                        const formatted = batch.map(row => ({
+                          telefono: normalizePhone(row[mapping.telefono]),
+                          nombre_sucursal: row[mapping.nombre_sucursal] || null,
+                          fecha_ultimo_pedido: row[mapping.fecha_ultimo_pedido] ? new Date(row[mapping.fecha_ultimo_pedido]).toISOString() : null,
+                          cantidad_pedidos: parseInt(row[mapping.cantidad_pedidos] || '0', 10)
+                        })).filter(r => r.telefono && r.telefono.length >= 10);
+
+                        const { error: upsertError } = await supabase
+                          .from('clientes')
+                          .upsert(formatted, { onConflict: 'telefono' });
+                        
+                        if (upsertError) error += batch.length;
+                        else success += formatted.length;
+                      }
+
+                      setImportStats({ total: csvRows.length, success, error });
+                      setImportStep(3);
+                      setIsImporting(false);
+                      fetchClientes(); // Refresh list
+                    }}
+                  >
+                    {isImporting ? 'Procesando...' : `Importar ${csvRows.length} filas`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {importStep === 3 && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ background: 'rgba(35, 134, 54, 0.1)', width: '64px', height: '64px', borderRadius: '50%', margin: '0 auto 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#238636' }}>
+                  <CheckCircle2 size={32} />
+                </div>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>¡Importación Finalizada!</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+                  <div style={{ padding: '1rem', background: 'var(--surface-hover)', borderRadius: '8px' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Exitosos</p>
+                    <p style={{ fontSize: '1.2rem', fontWeight: '700', color: '#238636' }}>{importStats.success}</p>
+                  </div>
+                  <div style={{ padding: '1rem', background: 'var(--surface-hover)', borderRadius: '8px' }}>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Errores</p>
+                    <p style={{ fontSize: '1.2rem', fontWeight: '700', color: importStats.error > 0 ? '#da3633' : 'var(--text-secondary)' }}>{importStats.error}</p>
+                  </div>
+                </div>
+                <button className="btn-primary" onClick={() => setShowImportModal(false)} style={{ width: '100%' }}>
+                  Cerrar y Ver Clientes
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
