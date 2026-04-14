@@ -72,7 +72,10 @@ export const updateSession = async (request) => {
     }
 
     // 3. Simple Admin Authorization
-    if (isAdminRoute && profile?.role !== 'admin') {
+    const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
+    const isWhitelisted = adminEmails.includes(user.email);
+
+    if (isAdminRoute && profile?.role !== 'admin' && !isWhitelisted) {
       const url = request.nextUrl.clone();
       url.pathname = '/dashboard';
       return NextResponse.redirect(url);

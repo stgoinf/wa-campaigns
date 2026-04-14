@@ -23,37 +23,62 @@ export default function Sidebar() {
 
 
   const [isAdmin, setIsAdmin] = useState(false);
-  const [menuItems, setMenuItems] = useState([
+  
+  const baseMenuItems = [
     { label: 'Dashboard', icon: <PieChart size={20} />, href: '/dashboard' },
     { label: 'Clientes', icon: <Users size={20} />, href: '/dashboard/clientes' },
     { label: 'Cargar CSV', icon: <Upload size={20} />, href: '/dashboard/upload' },
     { label: 'Envíos', icon: <Send size={20} />, href: '/dashboard/send' },
     { label: 'Configuración', icon: <Settings size={20} />, href: '/dashboard/settings' },
-  ]);
+  ];
 
   useEffect(() => {
     checkAdmin();
   }, []);
 
   async function checkAdmin() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: profile } = await supabase
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log("Sidebar: No hay usuario autenticado");
+        return;
+      }
+
+      console.log("Sidebar: Verificando rol para", user.email);
+
+      // 1. Verificar por email (Fallback de emergencia)
+      const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
+      if (adminEmails.includes(user.email)) {
+        console.log("Sidebar: Acceso concedido por email en lista blanca");
+        setIsAdmin(true);
+        return;
+      }
+
+      // 2. Verificar por base de datos
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .single();
       
-      if (profile?.role === 'admin') {
-        setIsAdmin(true);
-        // Add Admin link at the top
-        setMenuItems(prev => [
-          { label: 'Admin Backoffice', icon: <ShieldCheck size={20} />, href: '/dashboard/admin' },
-          ...prev
-        ]);
+      if (error) {
+        console.error("Sidebar: Error al cargar perfil:", error.message);
       }
+
+      if (profile?.role === 'admin') {
+        console.log("Sidebar: Acceso concedido por rol admin en DB");
+        setIsAdmin(true);
+      } else {
+        console.log("Sidebar: Usuario no es admin. Rol:", profile?.role);
+      }
+    } catch (err) {
+      console.error("Sidebar: Error inesperado en checkAdmin:", err);
     }
   }
+
+  const menuItems = isAdmin 
+    ? [{ label: 'Admin Backoffice', icon: <ShieldCheck size={20} />, href: '/dashboard/admin' }, ...baseMenuItems]
+    : baseMenuItems;
 
 
   return (
