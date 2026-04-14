@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { getTemplates, sendTemplateMessage } from './actions';
+import { getTemplates, sendTemplateMessage, getWhatsAppStatus } from './actions';
 import { 
   Send, 
   RefreshCw, 
@@ -30,6 +30,7 @@ export default function BulkSend() {
   const [sendingStatus, setSendingStatus] = useState('idle'); // idle, sending, finished, cancelled
   const [sendProgress, setSendProgress] = useState({ total: 0, current: 0, success: 0, failed: 0 });
   const [timeStats, setTimeStats] = useState({ elapsed: 0, remaining: 0 });
+  const [accountStatus, setAccountStatus] = useState({ loading: true, data: null, error: null });
 
   // Ref to track cancellation
   const cancelRef = useRef(false);
@@ -45,7 +46,18 @@ export default function BulkSend() {
   useEffect(() => {
     fetchTemplates();
     fetchCandidates();
+    fetchAccountStatus();
   }, []);
+
+  async function fetchAccountStatus() {
+    setAccountStatus(prev => ({ ...prev, loading: true }));
+    const res = await getWhatsAppStatus();
+    if (res.success) {
+      setAccountStatus({ loading: false, data: res.data, error: null });
+    } else {
+      setAccountStatus({ loading: false, data: null, error: res.error });
+    }
+  }
 
   async function fetchTemplates() {
     setLoadingTemplates(true);
@@ -390,28 +402,63 @@ export default function BulkSend() {
           </section>
 
           <div className="glass-panel" style={{ padding: '1.5rem', background: 'rgba(47, 129, 247, 0.02)', border: '1px solid var(--border-color)' }}>
-            <h4 style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Shield size={18} color="var(--accent-color)" />
-              Estándares de Calidad
-            </h4>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <Shield size={18} color="var(--accent-color)" />
+                Estado Real (Meta)
+              </h4>
+              <button 
+                onClick={fetchAccountStatus} 
+                disabled={accountStatus.loading}
+                style={{ background: 'transparent', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: '4px' }}
+                title="Actualizar estado"
+              >
+                <RefreshCw size={14} className={accountStatus.loading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+
             <div style={{ display: 'grid', gap: '1rem' }}>
-              <div style={{ fontSize: '0.8rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Messaging Tier:</span>
-                  <span style={{ fontWeight: '600' }}>Tier 1 (1k/día)</span>
+              {accountStatus.loading ? (
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Consultando Meta API...</p>
+              ) : accountStatus.error ? (
+                <div style={{ padding: '0.75rem', background: 'rgba(218, 54, 51, 0.05)', borderRadius: '8px', border: '1px solid rgba(218, 54, 51, 0.1)', color: '#da3633', fontSize: '0.75rem' }}>
+                  No se pudo cargar el estado: {accountStatus.error}
                 </div>
-                <div style={{ width: '100%', height: '4px', background: 'var(--surface-hover)', borderRadius: '2px' }}>
-                  <div style={{ width: '20%', height: '100%', background: 'var(--accent-color)' }}></div>
-                </div>
-              </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                Para subir a <strong>Tier 2 (10k/día)</strong>, debes mantener una calificación de calidad alta y alcanzar el límite de tu tier actual en 24h.
-              </p>
-              <div style={{ padding: '0.75rem', background: 'rgba(255, 170, 0, 0.05)', borderRadius: '8px', border: '1px solid rgba(255, 170, 0, 0.1)' }}>
-                <p style={{ fontSize: '0.7rem', color: '#d29922', fontWeight: '600' }}>
-                  ⚠ Evita el SPAM: Si tu tasa de bloqueo supera el 10%, Meta bajará tu calidad.
-                </p>
-              </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Línea:</span>
+                    <span style={{ fontWeight: '600' }}>{accountStatus.data.name}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Calidad:</span>
+                    <span style={{ 
+                      fontWeight: '700', 
+                      color: accountStatus.data.quality === 'GREEN' ? '#238636' : accountStatus.data.quality === 'YELLOW' ? '#d29922' : '#da3633',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: accountStatus.data.quality === 'GREEN' ? '#238636' : accountStatus.data.quality === 'YELLOW' ? '#d29922' : '#da3633' }}></div>
+                      {accountStatus.data.quality}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Status:</span>
+                    <span style={{ fontWeight: '600', color: accountStatus.data.status === 'CONNECTED' ? '#238636' : '#da3633' }}>
+                      {accountStatus.data.status}
+                    </span>
+                  </div>
+
+                  {accountStatus.data.quality === 'RED' && (
+                    <div style={{ padding: '0.75rem', background: 'rgba(218, 54, 51, 0.1)', borderRadius: '8px', border: '1px solid #da3633' }}>
+                      <p style={{ fontSize: '0.7rem', color: '#da3633', fontWeight: '600', margin: 0 }}>
+                        ⚠ ALERTA: La calidad es BAJA. El envío masivo podría ser bloqueado por Meta. 
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 

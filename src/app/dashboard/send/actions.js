@@ -84,3 +84,42 @@ export async function sendTemplateMessage({ phone, templateName, languageCode, c
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Fetches real-time quality rating and status of the WhatsApp phone number
+ */
+export async function getWhatsAppStatus() {
+  const supabase = await createClient();
+  try {
+    // 1. Get credentials
+    const { data: config } = await supabase.from('configuracion').select('*');
+    const token = config.find(c => c.key === 'WABA_TOKEN')?.value;
+    const phoneNumberId = config.find(c => c.key === 'WABA_PHONE_NUMBER_ID')?.value;
+
+    if (!token || !phoneNumberId) throw new Error('Credenciales incompletas');
+
+    // 2. Call Meta API for phone number status
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}?fields=quality_rating,status,verified_name`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    );
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    return { 
+      success: true, 
+      data: {
+        quality: data.quality_rating, // GREEN, YELLOW, RED
+        status: data.status,        // CONNECTED, FLAGGED, RESTRICTED
+        name: data.verified_name
+      } 
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
