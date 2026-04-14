@@ -10,7 +10,8 @@ import {
   CheckCircle, 
   AlertTriangle,
   Users,
-  Play
+  Play,
+  Shield
 } from 'lucide-react';
 
 export default function BulkSend() {
