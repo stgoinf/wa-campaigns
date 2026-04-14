@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   Users,
   Play,
-  Shield
+  Shield,
+  Smartphone
 } from 'lucide-react';
 
 export default function BulkSend() {
