@@ -45,6 +45,31 @@ export default function Clientes() {
   });
   const [isImporting, setIsImporting] = useState(false);
   const [importStats, setImportStats] = useState({ total: 0, success: 0, error: 0 });
+  const [failedRows, setFailedRows] = useState([]);
+
+  const downloadErrorReport = () => {
+    if (failedRows.length === 0) return;
+    
+    // Convert failed rows to CSV
+    const headers = [...Object.keys(failedRows[0].data), 'Motivo del Error'];
+    const csvContent = [
+      headers.join(','),
+      ...failedRows.map(f => {
+        const rowData = Object.values(f.data).map(val => `"${val || ''}"`).join(',');
+        return `${rowData},"${f.error}"`;
+      })
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `errores_importacion_${new Date().getTime()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const normalizePhone = (phone) => {
     if (!phone) return '';
@@ -389,6 +414,7 @@ export default function Clientes() {
                         onChange={(e) => setMapping({...mapping, [field.key]: e.target.value})}
                       >
                         <option value="">Selecciona columna...</option>
+                        <option value="skip" style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>-- Omitir campo --</option>
                         {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
                       <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{field.hint}</span>
@@ -404,28 +430,63 @@ export default function Clientes() {
                     style={{ flex: 2 }}
                     onClick={async () => {
                       setIsImporting(true);
+                      setFailedRows([]);
                       let success = 0;
                       let error = 0;
+                      let currentFailed = [];
                       
                       // Process in batches
                       const batchSize = 100;
                       for (let i = 0; i < csvRows.length; i += batchSize) {
                         const batch = csvRows.slice(i, i + batchSize);
-                        const formatted = batch.map(row => ({
-                          telefono: normalizePhone(row[mapping.telefono]),
-                          nombre_sucursal: row[mapping.nombre_sucursal] || null,
-                          fecha_ultimo_pedido: row[mapping.fecha_ultimo_pedido] ? new Date(row[mapping.fecha_ultimo_pedido]).toISOString() : null,
-                          cantidad_pedidos: parseInt(row[mapping.cantidad_pedidos] || '0', 10)
-                        })).filter(r => r.telefono && r.telefono.length >= 10);
+                        const formatted = batch.map(row => {
+                          // Mandatory Phone
+                          const rawPhone = mapping.telefono && mapping.telefono !== 'skip' ? row[mapping.telefono] : null;
+                          const phone = normalizePhone(rawPhone);
+                          
+                          if (!phone || phone.length < 10) {
+                            currentFailed.push({ data: row, error: 'Número de teléfono inválido o vacío' });
+                            return null;
+                          }
 
-                        const { error: upsertError } = await supabase
-                          .from('clientes')
-                          .upsert(formatted, { onConflict: 'telefono' });
-                        
-                        if (upsertError) error += batch.length;
-                        else success += formatted.length;
+                          // Optional Fields
+                          const sucursal = mapping.nombre_sucursal && mapping.nombre_sucursal !== 'skip' ? row[mapping.nombre_sucursal] : null;
+                          const fechaRaw = mapping.fecha_ultimo_pedido && mapping.fecha_ultimo_pedido !== 'skip' ? row[mapping.fecha_ultimo_pedido] : null;
+                          const cantidadRaw = mapping.cantidad_pedidos && mapping.cantidad_pedidos !== 'skip' ? row[mapping.cantidad_pedidos] : null;
+
+                          let fecha = null;
+                          if (fechaRaw) {
+                            const d = new Date(fechaRaw);
+                            if (!isNaN(d.getTime())) fecha = d.toISOString();
+                          }
+
+                          return {
+                            telefono: phone,
+                            nombre_sucursal: sucursal || null,
+                            fecha_ultimo_pedido: fecha,
+                            cantidad_pedidos: parseInt(cantidadRaw || '0', 10)
+                          };
+                        }).filter(Boolean);
+
+                        error += (batch.length - formatted.length);
+
+                        if (formatted.length > 0) {
+                          const { error: upsertError } = await supabase
+                            .from('clientes')
+                            .upsert(formatted, { onConflict: 'telefono' });
+                          
+                          if (upsertError) {
+                            // If batch fails, we record the error for the whole batch (simple approach)
+                            const simpleError = upsertError.message.includes('duplicate') ? 'Ya existe en la base de datos' : 'Error de formato en base de datos';
+                            batch.forEach(row => currentFailed.push({ data: row, error: simpleError }));
+                            error += formatted.length;
+                          } else {
+                            success += formatted.length;
+                          }
+                        }
                       }
 
+                      setFailedRows(currentFailed);
                       setImportStats({ total: csvRows.length, success, error });
                       setImportStep(3);
                       setIsImporting(false);
@@ -454,6 +515,18 @@ export default function Clientes() {
                     <p style={{ fontSize: '1.2rem', fontWeight: '700', color: importStats.error > 0 ? '#da3633' : 'var(--text-secondary)' }}>{importStats.error}</p>
                   </div>
                 </div>
+
+                {importStats.error > 0 && (
+                  <button 
+                    className="btn-secondary" 
+                    onClick={downloadErrorReport}
+                    style={{ width: '100%', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#da3633', borderColor: '#da3633' }}
+                  >
+                    <Upload size={18} style={{ transform: 'rotate(180deg)' }} />
+                    Descargar reporte de errores ({importStats.error})
+                  </button>
+                )}
+
                 <button className="btn-primary" onClick={() => setShowImportModal(false)} style={{ width: '100%' }}>
                   Cerrar y Ver Clientes
                 </button>
