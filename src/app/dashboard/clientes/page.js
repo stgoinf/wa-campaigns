@@ -440,13 +440,14 @@ export default function Clientes() {
                       for (let i = 0; i < csvRows.length; i += batchSize) {
                         const batch = csvRows.slice(i, i + batchSize);
                         const formatted = batch.map(row => {
+                          const rowErrors = [];
+                          
                           // Mandatory Phone
                           const rawPhone = mapping.telefono && mapping.telefono !== 'skip' ? row[mapping.telefono] : null;
                           const phone = normalizePhone(rawPhone);
                           
                           if (!phone || phone.length < 10) {
-                            currentFailed.push({ data: row, error: 'Número de teléfono inválido o vacío' });
-                            return null;
+                            rowErrors.push('Teléfono inválido/vacío');
                           }
 
                           // Optional Fields
@@ -457,14 +458,31 @@ export default function Clientes() {
                           let fecha = null;
                           if (fechaRaw) {
                             const d = new Date(fechaRaw);
-                            if (!isNaN(d.getTime())) fecha = d.toISOString();
+                            if (isNaN(d.getTime())) {
+                              rowErrors.push(`Fecha inválida: "${fechaRaw}"`);
+                            } else {
+                              fecha = d.toISOString();
+                            }
+                          }
+
+                          let cantidad = 0;
+                          if (cantidadRaw) {
+                            cantidad = parseInt(cantidadRaw, 10);
+                            if (isNaN(cantidad)) {
+                              rowErrors.push(`Cantidad no es número: "${cantidadRaw}"`);
+                            }
+                          }
+
+                          if (rowErrors.length > 0) {
+                            currentFailed.push({ data: row, error: rowErrors.join(' | ') });
+                            return null;
                           }
 
                           return {
                             telefono: phone,
                             nombre_sucursal: sucursal || null,
                             fecha_ultimo_pedido: fecha,
-                            cantidad_pedidos: parseInt(cantidadRaw || '0', 10)
+                            cantidad_pedidos: cantidad
                           };
                         }).filter(Boolean);
 
@@ -476,9 +494,11 @@ export default function Clientes() {
                             .upsert(formatted, { onConflict: 'telefono' });
                           
                           if (upsertError) {
-                            // If batch fails, we record the error for the whole batch (simple approach)
-                            const simpleError = upsertError.message.includes('duplicate') ? 'Ya existe en la base de datos' : 'Error de formato en base de datos';
-                            batch.forEach(row => currentFailed.push({ data: row, error: simpleError }));
+                            let simpleError = 'Error de sistema';
+                            if (upsertError.message.includes('duplicate')) simpleError = 'Teléfono duplicado';
+                            if (upsertError.message.includes('invalid input syntax')) simpleError = 'Formato de dato incorrecto en DB';
+                            
+                            batch.forEach(row => currentFailed.push({ data: row, error: `${simpleError}: ${upsertError.message}` }));
                             error += formatted.length;
                           } else {
                             success += formatted.length;
