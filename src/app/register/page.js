@@ -7,8 +7,10 @@ import Link from 'next/link';
 export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
   const [success, setSuccess] = useState(false);
   
   const supabase = createClient();
@@ -24,8 +26,12 @@ export default function Register() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: {
+          full_name: fullName
+        }
       },
     });
+
 
     if (error) {
       setError(error.message);
@@ -60,6 +66,18 @@ export default function Register() {
             ) : (
               <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ textAlign: 'left' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: 'var(--text-secondary)' }}>Nombre completo</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Ej. Juan Pérez" 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div style={{ textAlign: 'left' }}>
+
                   <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.4rem', color: 'var(--text-secondary)' }}>Correo electrónico</label>
                   <input 
                     type="email" 

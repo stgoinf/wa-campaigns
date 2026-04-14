@@ -46,11 +46,46 @@ export const updateSession = async (request) => {
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+  if (user) {
+    // Check approval status
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('approved, role')
+      .eq('id', user.id)
+      .single();
+
+    const isPendingPage = request.nextUrl.pathname === '/pending-approval';
+    const isAdminRoute = request.nextUrl.pathname.startsWith('/dashboard/admin');
+
+    // 1. Redirect unapproved users to pending page
+    if (!profile?.approved && !isPendingPage && isDashboardRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/pending-approval';
+      return NextResponse.redirect(url);
+    }
+
+    // 2. Redirect approved users away from pending page
+    if (profile?.approved && isPendingPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
+
+    // 3. Simple Admin Authorization
+    if (isAdminRoute && profile?.role !== 'admin') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
+
+    // 4. Redirect logged-in and approved users away from auth routes
+    if (isAuthRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
   }
+
 
   return supabaseResponse
 };

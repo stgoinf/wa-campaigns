@@ -1,5 +1,7 @@
 "use client";
+import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
+
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -8,8 +10,10 @@ import {
   Send, 
   Settings, 
   LogOut, 
-  PieChart
+  PieChart,
+  ShieldCheck
 } from 'lucide-react';
+
 
 
 export default function Sidebar() {
@@ -18,13 +22,39 @@ export default function Sidebar() {
   const supabase = createClient();
 
 
-  const menuItems = [
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [menuItems, setMenuItems] = useState([
     { label: 'Dashboard', icon: <PieChart size={20} />, href: '/dashboard' },
     { label: 'Clientes', icon: <Users size={20} />, href: '/dashboard/clientes' },
     { label: 'Cargar CSV', icon: <Upload size={20} />, href: '/dashboard/upload' },
     { label: 'Envíos', icon: <Send size={20} />, href: '/dashboard/send' },
     { label: 'Configuración', icon: <Settings size={20} />, href: '/dashboard/settings' },
-  ];
+  ]);
+
+  useEffect(() => {
+    checkAdmin();
+  }, []);
+
+  async function checkAdmin() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile?.role === 'admin') {
+        setIsAdmin(true);
+        // Add Admin link at the top
+        setMenuItems(prev => [
+          { label: 'Admin Backoffice', icon: <ShieldCheck size={20} />, href: '/dashboard/admin' },
+          ...prev
+        ]);
+      }
+    }
+  }
+
 
   return (
     <aside className="glass-panel" style={{ 
