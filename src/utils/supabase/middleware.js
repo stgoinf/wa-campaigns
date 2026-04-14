@@ -57,8 +57,13 @@ export const updateSession = async (request) => {
     const isPendingPage = request.nextUrl.pathname === '/pending-approval';
     const isAdminRoute = request.nextUrl.pathname.startsWith('/dashboard/admin');
 
+    // Admin Whitelist check
+    const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
+    const isWhitelisted = adminEmails.includes(user.email);
+
     // 1. Redirect unapproved users to pending page
-    if (!profile?.approved && !isPendingPage && isDashboardRoute) {
+    // Whitelisted admins bypass this check
+    if (!profile?.approved && !isPendingPage && isDashboardRoute && !isWhitelisted) {
       const url = request.nextUrl.clone();
       url.pathname = '/pending-approval';
       return NextResponse.redirect(url);
@@ -72,9 +77,6 @@ export const updateSession = async (request) => {
     }
 
     // 3. Simple Admin Authorization
-    const adminEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',').map(e => e.trim()) || [];
-    const isWhitelisted = adminEmails.includes(user.email);
-
     if (isAdminRoute && profile?.role !== 'admin' && !isWhitelisted) {
       const url = request.nextUrl.clone();
       url.pathname = '/dashboard';
