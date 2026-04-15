@@ -30,10 +30,13 @@ export default function BulkSend() {
   
   const [sendingStatus, setSendingStatus] = useState('idle'); // idle, sending, finished, cancelled
   const [sendProgress, setSendProgress] = useState({ total: 0, current: 0, success: 0, failed: 0 });
+  const [sendErrors, setSendErrors] = useState([]); // [{phone, nombre, error}]
+  const [showErrors, setShowErrors] = useState(false);
   const [timeStats, setTimeStats] = useState({ elapsed: 0, remaining: 0 });
   const [accountStatus, setAccountStatus] = useState({ loading: true, data: null, error: null });
   const [testPhoneNumber, setTestPhoneNumber] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState(null); // null | {success, message}
 
   // Ref to track cancellation
   const cancelRef = useRef(false);
@@ -69,6 +72,7 @@ export default function BulkSend() {
     }
 
     setSendingTest(true);
+    setTestResult(null);
     try {
       const { data: config } = await supabase.from('configuracion').select('*');
       const phoneNumberId = config.find(c => c.key === 'WABA_PHONE_NUMBER_ID')?.value;
@@ -92,12 +96,12 @@ export default function BulkSend() {
       });
 
       if (res.success) {
-        alert('✅ Mensaje de prueba enviado con éxito a ' + testPhoneNumber);
+        setTestResult({ success: true, message: 'Mensaje enviado con éxito a ' + testPhoneNumber });
       } else {
-        throw new Error(res.error);
+        setTestResult({ success: false, message: res.error || 'Error desconocido' });
       }
     } catch (error) {
-      alert('❌ Error en prueba: ' + error.message);
+      setTestResult({ success: false, message: error.message });
     } finally {
       setSendingTest(false);
     }
@@ -157,6 +161,8 @@ export default function BulkSend() {
     setSendingStatus('sending');
     cancelRef.current = false;
     setSendProgress({ total: candidates.length, current: 0, success: 0, failed: 0 });
+    setSendErrors([]);
+    setShowErrors(false);
     
     const startTime = Date.now();
     const batchSize = 5;
@@ -202,6 +208,14 @@ export default function BulkSend() {
           status: res.success ? 'sent' : 'failed',
           error_message: res.error || null
         });
+
+        if (!res.success) {
+          setSendErrors(prev => [...prev, {
+            phone: client.telefono,
+            nombre: client.nombre_sucursal || client.telefono,
+            error: res.error || 'Error desconocido'
+          }]);
+        }
 
         return res.success;
       }));
@@ -399,17 +413,17 @@ export default function BulkSend() {
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
                   Ingresa tu número para recibir una prueba real en tu WhatsApp antes de enviar masivamente.
                 </p>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="Ej: 18095551234" 
+                <div style={{ display: 'flex', gap: '0.75rem', marginBottom: testResult ? '0.75rem' : '0' }}>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Ej: 18095551234"
                     value={testPhoneNumber}
-                    onChange={(e) => setTestPhoneNumber(e.target.value)}
+                    onChange={(e) => { setTestPhoneNumber(e.target.value); setTestResult(null); }}
                     style={{ flex: 1 }}
                   />
-                  <button 
-                    className="btn-primary" 
+                  <button
+                    className="btn-primary"
                     onClick={sendTestMessage}
                     disabled={sendingTest || !testPhoneNumber}
                     style={{ whiteSpace: 'nowrap' }}
@@ -417,6 +431,11 @@ export default function BulkSend() {
                     {sendingTest ? 'Enviando...' : 'Enviar Prueba Ahora'}
                   </button>
                 </div>
+                {testResult && (
+                  <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', background: testResult.success ? 'rgba(35,134,54,0.08)' : 'rgba(218,54,51,0.08)', border: `1px solid ${testResult.success ? 'rgba(35,134,54,0.3)' : 'rgba(218,54,51,0.3)'}`, fontSize: '0.82rem', color: testResult.success ? '#238636' : '#da3633' }}>
+                    {testResult.success ? '✓ ' : '✗ '}{testResult.message}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -487,12 +506,42 @@ export default function BulkSend() {
               </div>
             ) : sendingStatus === 'finished' ? (
               <div style={{ textAlign: 'center' }}>
-                <CheckCircle size={48} style={{ margin: '0 auto 1rem', color: '#238636' }} />
+                <CheckCircle size={48} style={{ margin: '0 auto 1rem', color: sendProgress.failed > 0 ? '#d29922' : '#238636' }} />
                 <h4 style={{ marginBottom: '0.5rem', fontSize: '1.2rem' }}>Envío Finalizado</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
                   Se procesaron {sendProgress.total} contactos en {formatTime(timeStats.elapsed)}.
                 </p>
-                <button className="btn-primary" style={{ width: '100%' }} onClick={() => setSendingStatus('idle')}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
+                  <div style={{ padding: '8px', background: 'rgba(35, 134, 54, 0.1)', borderRadius: '8px', color: '#238636' }}>
+                    <p>Enviados</p>
+                    <p style={{ fontWeight: '700', fontSize: '1.1rem' }}>{sendProgress.success}</p>
+                  </div>
+                  <div style={{ padding: '8px', background: sendProgress.failed > 0 ? 'rgba(218, 54, 51, 0.1)' : 'var(--surface-hover)', borderRadius: '8px', color: sendProgress.failed > 0 ? '#da3633' : 'var(--text-secondary)' }}>
+                    <p>Fallidos</p>
+                    <p style={{ fontWeight: '700', fontSize: '1.1rem' }}>{sendProgress.failed}</p>
+                  </div>
+                </div>
+                {sendErrors.length > 0 && (
+                  <div style={{ marginBottom: '1rem', textAlign: 'left' }}>
+                    <button
+                      onClick={() => setShowErrors(v => !v)}
+                      style={{ background: 'transparent', border: '1px solid rgba(218,54,51,0.4)', color: '#da3633', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '0.78rem', width: '100%', marginBottom: '0.5rem' }}
+                    >
+                      {showErrors ? 'Ocultar errores' : `Ver ${sendErrors.length} error${sendErrors.length !== 1 ? 'es' : ''}`}
+                    </button>
+                    {showErrors && (
+                      <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid rgba(218,54,51,0.2)', borderRadius: '8px', padding: '0.5rem', background: 'rgba(218,54,51,0.03)' }}>
+                        {sendErrors.map((e, i) => (
+                          <div key={i} style={{ padding: '6px 8px', borderBottom: i < sendErrors.length - 1 ? '1px solid rgba(218,54,51,0.1)' : 'none' }}>
+                            <p style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '2px' }}>{e.nombre} — {e.phone}</p>
+                            <p style={{ fontSize: '0.7rem', color: '#da3633' }}>{e.error}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button className="btn-primary" style={{ width: '100%' }} onClick={() => { setSendingStatus('idle'); setSendErrors([]); setShowErrors(false); }}>
                   Nueva Campaña
                 </button>
               </div>
@@ -500,10 +549,30 @@ export default function BulkSend() {
               <div style={{ textAlign: 'center' }}>
                 <AlertTriangle size={48} style={{ margin: '0 auto 1rem', color: '#d29922' }} />
                 <h4 style={{ marginBottom: '0.5rem', fontSize: '1.2rem' }}>Campaña Detenida</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-                  El proceso fue cancelado manualmente.
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                  Procesados: {sendProgress.current} / {sendProgress.total} — Enviados: {sendProgress.success} — Fallidos: {sendProgress.failed}
                 </p>
-                <button className="btn-primary" style={{ width: '100%' }} onClick={() => setSendingStatus('idle')}>
+                {sendErrors.length > 0 && (
+                  <div style={{ marginBottom: '1rem', textAlign: 'left' }}>
+                    <button
+                      onClick={() => setShowErrors(v => !v)}
+                      style={{ background: 'transparent', border: '1px solid rgba(218,54,51,0.4)', color: '#da3633', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '0.78rem', width: '100%', marginBottom: '0.5rem' }}
+                    >
+                      {showErrors ? 'Ocultar errores' : `Ver ${sendErrors.length} error${sendErrors.length !== 1 ? 'es' : ''}`}
+                    </button>
+                    {showErrors && (
+                      <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid rgba(218,54,51,0.2)', borderRadius: '8px', padding: '0.5rem', background: 'rgba(218,54,51,0.03)' }}>
+                        {sendErrors.map((e, i) => (
+                          <div key={i} style={{ padding: '6px 8px', borderBottom: i < sendErrors.length - 1 ? '1px solid rgba(218,54,51,0.1)' : 'none' }}>
+                            <p style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '2px' }}>{e.nombre} — {e.phone}</p>
+                            <p style={{ fontSize: '0.7rem', color: '#da3633' }}>{e.error}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button className="btn-primary" style={{ width: '100%' }} onClick={() => { setSendingStatus('idle'); setSendErrors([]); setShowErrors(false); }}>
                   Reiniciar
                 </button>
               </div>
