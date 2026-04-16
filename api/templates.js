@@ -1,19 +1,19 @@
 // GET /api/templates
 // Devuelve las plantillas APPROVED desde la cuenta de Meta/WhatsApp Business
 
-const GRAPH_URL = 'https://graph.facebook.com/v19.0';
+const GRAPH_URL       = 'https://graph.facebook.com/v19.0';
+const { getSettings } = require('./_lib/getSettings');
 
 module.exports = async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).end();
 
-    const token   = process.env.WA_ACCESS_TOKEN;
-    const phoneId = process.env.WA_PHONE_NUMBER_ID;
+    const settings = await getSettings();
+    const token    = settings.wa_access_token;
+    const wabaId   = settings.wa_business_account_id;
 
-    if (!token || !phoneId) {
-        return res.status(500).json({ error: 'WA_ACCESS_TOKEN o WA_PHONE_NUMBER_ID no configurados' });
+    if (!token) {
+        return res.status(500).json({ error: 'Access Token no configurado. Ve a Configuración y guarda tus credenciales.' });
     }
-
-    const wabaId = settings.wa_business_account_id;
     if (!wabaId) {
         return res.status(500).json({ error: 'Business Account ID no configurado. Ve a Configuración y guarda el Business Account ID.' });
     }
