@@ -73,6 +73,9 @@
             <a class="nav-item" data-tab="campaigns">
                 <i class="ph ph-paper-plane-tilt"></i> Campañas
             </a>
+            <a class="nav-item" data-tab="contacts">
+                <i class="ph ph-address-book"></i> Clientes
+            </a>
             <a class="nav-item" data-tab="config">
                 <i class="ph ph-gear"></i> Configuración
             </a>
@@ -270,6 +273,87 @@
             </div>
         </div>
 
+        <!-- ════════ Tab: Clientes ════════ -->
+        <div id="tab-contacts" class="tab-panel">
+            <header>
+                <div class="header-titles">
+                    <h1>Clientes</h1>
+                    <p>Gestiona tus contactos de WhatsApp</p>
+                </div>
+                <button id="btn-import-contacts" class="btn-primary">
+                    <i class="ph ph-upload-simple"></i> Importar CSV
+                </button>
+            </header>
+
+            <!-- Stats rápidas -->
+            <div class="contacts-stats glass-panel" id="contacts-stats-panel">
+                <div class="cstat">
+                    <i class="ph ph-users"></i>
+                    <div><p>Total contactos</p><h3 id="cstat-total">—</h3></div>
+                </div>
+                <div class="cstat">
+                    <i class="ph ph-paper-plane-tilt"></i>
+                    <div><p>Con envío registrado</p><h3 id="cstat-sent">—</h3></div>
+                </div>
+                <div class="cstat">
+                    <i class="ph ph-clock"></i>
+                    <div><p>Sin envío aún</p><h3 id="cstat-never">—</h3></div>
+                </div>
+            </div>
+
+            <!-- Barra de búsqueda y filtro -->
+            <div class="contacts-search-bar glass-panel">
+                <div class="search-input-wrap">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="contacts-search" class="glass-select search-input"
+                        placeholder="Buscar por número o nombre...">
+                </div>
+                <select id="contacts-etiqueta-filter" class="glass-select etiqueta-select">
+                    <option value="">Todas las etiquetas</option>
+                </select>
+                <button id="btn-refresh-contacts" class="icon-btn" title="Actualizar">
+                    <i class="ph ph-arrows-clockwise"></i>
+                </button>
+            </div>
+
+            <!-- Tabla de contactos -->
+            <div class="glass-panel" id="contacts-table-wrap">
+                <div class="table-container">
+                    <table id="contacts-table">
+                        <thead>
+                            <tr>
+                                <th>Teléfono</th>
+                                <th>Nombre</th>
+                                <th>Etiqueta</th>
+                                <th>Último envío</th>
+                                <th>Registrado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contacts-tbody">
+                            <tr>
+                                <td colspan="6" class="empty-state">
+                                    <i class="ph ph-address-book"></i>
+                                    <p>No hay contactos. Importa un CSV para comenzar.</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginación -->
+                <div class="contacts-pagination" id="contacts-pagination" style="display:none">
+                    <button id="btn-contacts-prev" class="btn-page" disabled>
+                        <i class="ph ph-caret-left"></i> Anterior
+                    </button>
+                    <span id="contacts-page-label">Página 1 de 1</span>
+                    <button id="btn-contacts-next" class="btn-page">
+                        Siguiente <i class="ph ph-caret-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- ════════ Tab: Configuración ════════ -->
         <div id="tab-config" class="tab-panel">
             <header>
@@ -417,6 +501,40 @@
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- ─── Modal: Importar contactos ─── -->
+<div id="modal-contacts-import" class="modal" style="display:none">
+    <div class="modal-overlay" id="contacts-import-overlay"></div>
+    <div class="modal-card glass-panel">
+        <div class="modal-header">
+            <h2><i class="ph ph-upload-simple"></i> Importar contactos</h2>
+            <button class="icon-btn" id="contacts-import-close"><i class="ph ph-x"></i></button>
+        </div>
+
+        <p class="contacts-import-hint">
+            El CSV debe tener al menos la columna <strong>telefono</strong> (o phone, celular).<br>
+            Columnas opcionales: <strong>nombre</strong>, <strong>etiqueta</strong>.<br>
+            Los contactos existentes se <strong>actualizan</strong>, no se borran.
+        </p>
+
+        <!-- Zona de drop / click -->
+        <div class="csv-dropzone" id="contacts-dropzone">
+            <i class="ph ph-file-csv"></i>
+            <p>Arrastra tu archivo CSV aquí<br><span>o haz clic para seleccionar</span></p>
+            <input type="file" id="contacts-csv-input" accept=".csv" hidden>
+        </div>
+
+        <p id="contacts-import-filename" class="import-filename" style="display:none"></p>
+        <p id="contacts-import-result"   class="import-result"   style="display:none"></p>
+
+        <div class="modal-actions">
+            <button type="button" class="btn-ghost" id="contacts-import-cancel">Cancelar</button>
+            <button type="button" class="btn-primary" id="contacts-import-submit" disabled>
+                <i class="ph ph-upload-simple"></i> Importar
+            </button>
+        </div>
     </div>
 </div>
 

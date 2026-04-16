@@ -1,6 +1,7 @@
 // POST /api/contacts/upload
 // Body: { contacts: [{ telefono, nombre?, etiqueta? }] }
-// El cliente parsea el CSV y envía los datos ya procesados
+// Upsert aditivo — los contactos existentes se actualizan, no se borran.
+// Los campos last_sent_at y last_template se preservan al hacer upsert.
 
 const { adminClient } = require('../_lib/supabase');
 
@@ -17,19 +18,18 @@ module.exports = async function handler(req, res) {
 
     const sb = adminClient();
 
-    // Limpiar tabla y re-insertar en lotes
-    const { error: delErr } = await sb.from('contacts').delete().neq('id', 0);
-    if (delErr) return res.status(500).json({ error: delErr.message });
-
     let inserted = 0;
     for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
         const batch = contacts.slice(i, i + BATCH_SIZE).map(c => ({
-            telefono:  String(c.telefono).replace(/\D/g, ''),
-            nombre:    c.nombre  || null,
-            etiqueta:  c.etiqueta || null
+            telefono: String(c.telefono).replace(/\D/g, ''),
+            nombre:   c.nombre   || null,
+            etiqueta: c.etiqueta || null
         })).filter(c => c.telefono.length >= 8);
 
-        const { error } = await sb.from('contacts').upsert(batch, { onConflict: 'telefono' });
+        // ignoredDuplicateHandling: upsert preserva last_sent_at y last_template existentes
+        const { error } = await sb
+            .from('contacts')
+            .upsert(batch, { onConflict: 'telefono', ignoreDuplicates: false });
         if (error) return res.status(500).json({ error: error.message });
         inserted += batch.length;
     }

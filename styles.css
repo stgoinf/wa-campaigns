@@ -983,6 +983,194 @@ header p { color: var(--text-secondary); }
 }
 
 /* ─────────────────────────────────────────────
+   Módulo Clientes
+───────────────────────────────────────────── */
+
+/* Stats rápidas */
+.contacts-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding: 1rem 1.5rem;
+}
+.cstat {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 140px;
+}
+.cstat > i {
+    font-size: 1.6rem;
+    color: var(--accent-green);
+    flex-shrink: 0;
+}
+.cstat p {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.15rem;
+}
+.cstat h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* Barra de búsqueda y filtro */
+.contacts-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.search-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 180px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 0 0.75rem;
+}
+.search-input-wrap i { color: var(--text-secondary); flex-shrink: 0; }
+.search-input {
+    background: transparent !important;
+    border: none !important;
+    padding: 0.55rem 0 !important;
+    flex: 1;
+}
+.search-input:focus { outline: none; box-shadow: none !important; }
+.etiqueta-select { max-width: 200px; }
+
+/* Tabla de contactos (reutiliza estilos de #campaigns-table) */
+#contacts-table {
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    width: 100%;
+}
+#contacts-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    white-space: nowrap;
+}
+#contacts-table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    vertical-align: middle;
+}
+#contacts-table tr:last-child td { border-bottom: none; }
+#contacts-table tr:hover td { background: rgba(255,255,255,0.02); }
+.phone-code {
+    font-family: 'Outfit', monospace;
+    font-size: 0.85rem;
+    color: #93c5fd;
+    background: rgba(147,197,253,0.08);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+}
+.dim { color: var(--text-secondary); font-size: 0.82rem; }
+.last-sent-cell { line-height: 1.5; }
+.last-sent-date {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+.last-template {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--accent-green);
+    font-family: monospace;
+}
+
+/* Paginación */
+.contacts-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.btn-page {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    font-family: 'Outfit', sans-serif;
+    transition: var(--transition);
+}
+.btn-page:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+.btn-page:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Modal de importación de contactos ─────── */
+.contacts-import-hint {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+}
+.csv-dropzone {
+    border: 2px dashed rgba(37,211,102,0.3);
+    border-radius: 12px;
+    padding: 2rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    background: rgba(37,211,102,0.03);
+    margin-bottom: 0.75rem;
+}
+.csv-dropzone:hover,
+.csv-dropzone.dropzone-over {
+    border-color: var(--accent-green);
+    background: rgba(37,211,102,0.08);
+}
+.csv-dropzone i {
+    font-size: 2.5rem;
+    color: var(--accent-green);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+.csv-dropzone p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+.csv-dropzone span { font-size: 0.8rem; color: var(--accent-green); }
+.import-filename {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    padding: 0.4rem 0;
+}
+.import-result {
+    padding: 0.6rem 0.9rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin: 0.5rem 0;
+}
+.import-result-ok    { background: rgba(37,211,102,0.1); color: #4ade80; border: 1px solid rgba(37,211,102,0.3); }
+.import-result-error { background: rgba(239,68,68,0.1);  color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+/* ─────────────────────────────────────────────
    Responsive
 ───────────────────────────────────────────── */
 @media (max-width: 1024px) {
