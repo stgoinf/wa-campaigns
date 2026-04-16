@@ -1,9 +1,102 @@
 // ─────────────────────────────────────────────
-// Supabase — cliente del browser (solo usa la clave pública)
+// Supabase — cliente del browser (clave pública)
 // ─────────────────────────────────────────────
 const SUPABASE_URL      = 'https://lpliytimpwstaiydwfwk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__8vr69KZjUcdO13BlwgqVQ_1rm5b6OU';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─────────────────────────────────────────────
+// Autenticación
+// ─────────────────────────────────────────────
+async function checkAuth() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+        showApp(session.user);
+    } else {
+        showLogin();
+    }
+}
+
+function showLogin() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+}
+
+function showApp(user) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('user-email').textContent = user.email;
+}
+
+function setupAuth() {
+    // Login form
+    document.getElementById('form-login').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email    = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+        const btn      = document.getElementById('btn-login');
+        const errEl    = document.getElementById('login-error');
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Entrando...';
+        errEl.style.display = 'none';
+
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+        if (error) {
+            errEl.textContent   = 'Correo o contraseña incorrectos.';
+            errEl.style.display = 'block';
+            btn.disabled        = false;
+            btn.innerHTML       = '<i class="ph ph-sign-in"></i> Entrar';
+            return;
+        }
+
+        showApp(data.user);
+        init();
+    });
+
+    // Toggle contraseña visible
+    document.getElementById('toggle-password').addEventListener('click', () => {
+        const input = document.getElementById('login-password');
+        const icon  = document.getElementById('toggle-icon');
+        if (input.type === 'password') {
+            input.type      = 'text';
+            icon.className  = 'ph ph-eye-slash';
+        } else {
+            input.type      = 'password';
+            icon.className  = 'ph ph-eye';
+        }
+    });
+
+    // Logout
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+        await sb.auth.signOut();
+        if (realtimeChannel) realtimeChannel.unsubscribe();
+        campaignRunning = false;
+        globalData      = [];
+        showLogin();
+    });
+
+    // Escuchar cambios de sesión (expiración automática, etc.)
+    sb.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') showLogin();
+    });
+}
+
+// ─────────────────────────────────────────────
+// Helper: fetch autenticado (incluye JWT en header)
+// ─────────────────────────────────────────────
+async function authFetch(url, options = {}) {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token;
+    return fetch(url, {
+        ...options,
+        headers: {
+            ...(options.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+    });
+}
 
 // ─────────────────────────────────────────────
 // Estado global
@@ -49,7 +142,9 @@ function init() {
     showLoader(false);
     setupNavigation();
     setupAnalytics();
+    setupConfig();
     setupCampaigns();
+    setupErrorsModal();
     refreshContactsCount();
 }
 
@@ -66,6 +161,7 @@ function setupNavigation() {
             document.getElementById(`tab-${tab}`).classList.add('active');
             document.getElementById('filters-panel').style.display = tab === 'analytics' ? 'block' : 'none';
             if (tab === 'campaigns') loadCampaigns();
+            if (tab === 'config')    loadConfig();
         });
     });
 }
@@ -137,7 +233,7 @@ async function syncContactsToBackend(rows) {
         .filter(c => c.telefono.length >= 8);
 
     try {
-        const res  = await fetch('/api/contacts/upload', {
+        const res  = await authFetch('/api/contacts/upload', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({ contacts })
@@ -152,7 +248,7 @@ async function syncContactsToBackend(rows) {
 
 async function refreshContactsCount() {
     try {
-        const res  = await fetch('/api/contacts/count');
+        const res  = await authFetch('/api/contacts/count');
         const data = await res.json();
         if (data.count > 0) {
             contactsCount.textContent  = data.count.toLocaleString();
@@ -277,33 +373,171 @@ function downloadCSV() {
 // ══ CAMPAÑAS ══════════════════════════════════
 // ═══════════════════════════════════════════════
 
-let selectedTemplate = null; // plantilla actualmente seleccionada en el modal
+// ═══════════════════════════════════════════════
+// ══ CONFIGURACIÓN ════════════════════════════
+// ═══════════════════════════════════════════════
+
+let cachedTemplates = [];   // plantillas cargadas desde Meta
+
+function setupConfig() {
+    document.getElementById('form-config').addEventListener('submit', saveConfig);
+    document.getElementById('btn-test-connection').addEventListener('click', testConnection);
+
+    // Toggle visibilidad de token
+    document.querySelectorAll('.password-toggle[data-target]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const input = document.getElementById(btn.dataset.target);
+            const icon  = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type    = 'text';
+                icon.className = 'ph ph-eye-slash';
+            } else {
+                input.type    = 'password';
+                icon.className = 'ph ph-eye';
+            }
+        });
+    });
+}
+
+async function loadConfig() {
+    try {
+        const res  = await authFetch('/api/settings');
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            showConfigMsg('error', err.error || 'Error al cargar configuración del servidor.');
+            return;
+        }
+        const data = await res.json();
+
+        document.getElementById('cfg-token').placeholder      = data.wa_access_token      ? data.wa_access_token : 'EAABzA...';
+        document.getElementById('cfg-phone-id').value          = data.wa_phone_number_id     || '';
+        document.getElementById('cfg-business-id').value       = data.wa_business_account_id || '';
+
+        if (data.wa_access_token_updated_at) {
+            document.getElementById('cfg-token-updated').textContent =
+                'Actualizado: ' + new Date(data.wa_access_token_updated_at).toLocaleString('es');
+        }
+    } catch { /* backend no disponible */ }
+}
+
+async function saveConfig(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-save-config');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Guardando...';
+
+    try {
+        const res = await authFetch('/api/settings', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                wa_access_token:        document.getElementById('cfg-token').value.trim()      || undefined,
+                wa_phone_number_id:     document.getElementById('cfg-phone-id').value.trim()   || undefined,
+                wa_business_account_id: document.getElementById('cfg-business-id').value.trim()|| undefined
+            })
+        });
+
+        const data = await res.json();
+        showConfigMsg(res.ok ? 'success' : 'error', res.ok ? 'Configuración guardada.' : data.error);
+
+        if (res.ok) {
+            document.getElementById('cfg-token').value = '';
+            await loadConfig();
+        }
+    } catch (err) {
+        showConfigMsg('error', 'Error de conexión: ' + err.message);
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="ph ph-floppy-disk"></i> Guardar';
+    }
+}
+
+async function testConnection() {
+    const btn = document.getElementById('btn-test-connection');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Probando...';
+    showConfigMsg('', '');
+
+    try {
+        const res  = await authFetch('/api/templates');
+        const data = await res.json();
+
+        if (!res.ok) {
+            showConfigMsg('error', data.error || 'Error al conectar con Meta.');
+            document.getElementById('templates-panel').style.display = 'none';
+        } else {
+            cachedTemplates = data.templates;
+            showConfigMsg('success', `Conexión exitosa. ${data.total} plantilla${data.total !== 1 ? 's' : ''} aprobada${data.total !== 1 ? 's' : ''} encontrada${data.total !== 1 ? 's' : ''}.`);
+            renderTemplatesList(data.templates);
+        }
+    } catch (err) {
+        showConfigMsg('error', 'Error: ' + err.message);
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="ph ph-plugs"></i> Probar conexión';
+    }
+}
+
+function renderTemplatesList(templates) {
+    const panel    = document.getElementById('templates-panel');
+    const list     = document.getElementById('templates-list');
+    const subtitle = document.getElementById('templates-subtitle');
+
+    panel.style.display = 'block';
+
+    if (!templates.length) {
+        subtitle.textContent = 'No hay plantillas aprobadas en esta cuenta.';
+        list.innerHTML       = '';
+        return;
+    }
+
+    subtitle.textContent = `${templates.length} plantillas disponibles para usar en campañas`;
+
+    list.innerHTML = templates.map(t => {
+        const bodyComponent = t.components?.find(c => c.type === 'BODY');
+        const preview       = bodyComponent?.text || '(sin texto de cuerpo)';
+        return `
+        <div class="template-card">
+            <div class="template-header">
+                <span class="template-name">${escHtml(t.name)}</span>
+                <div class="template-meta">
+                    <span class="tag tag-lang">${escHtml(t.language)}</span>
+                    <span class="tag tag-cat">${escHtml(t.category)}</span>
+                </div>
+            </div>
+            <p class="template-preview">${escHtml(preview)}</p>
+        </div>`;
+    }).join('');
+}
+
+function showConfigMsg(type, text) {
+    const el = document.getElementById('config-msg');
+    if (!text) { el.style.display = 'none'; return; }
+    el.className      = `config-msg config-msg-${type}`;
+    el.textContent    = text;
+    el.style.display  = 'block';
+}
 
 function setupCampaigns() {
     document.getElementById('btn-new-campaign').addEventListener('click', openCampaignModal);
+    document.getElementById('btn-load-templates').addEventListener('click', loadTemplatesIntoModal);
     document.getElementById('modal-close').addEventListener('click', closeCampaignModal);
     document.getElementById('modal-cancel').addEventListener('click', closeCampaignModal);
     document.getElementById('modal-overlay').addEventListener('click', closeCampaignModal);
     document.getElementById('btn-refresh-campaigns').addEventListener('click', loadCampaigns);
     document.getElementById('btn-pause-campaign').addEventListener('click', pauseActiveCampaign);
     document.getElementById('form-campaign').addEventListener('submit', submitCampaign);
-    document.getElementById('btn-reload-templates').addEventListener('click', () => fetchTemplates(true));
     document.getElementById('f-source').addEventListener('change', e => {
         document.getElementById('f-etiqueta-group').style.display =
             e.target.value === 'etiqueta' ? 'block' : 'none';
         updateContactPreview();
     });
     document.getElementById('f-etiqueta').addEventListener('input', updateContactPreview);
-
-    // Modal de errores
-    document.getElementById('modal-errors-close').addEventListener('click', closeErrorsModal);
-    document.getElementById('modal-errors-cancel').addEventListener('click', closeErrorsModal);
-    document.getElementById('modal-errors-overlay').addEventListener('click', closeErrorsModal);
 }
 
 async function loadCampaigns() {
     try {
-        const res  = await fetch('/api/campaigns');
+        const res  = await authFetch('/api/campaigns');
         if (!res.ok) throw new Error(await res.text());
         renderCampaignsTable(await res.json());
     } catch {
@@ -322,7 +556,12 @@ function renderCampaignsTable(campaigns) {
             <i class="ph ph-paper-plane-tilt"></i><p>No hay campañas aún.</p></td></tr>`;
         return;
     }
-    tbody.innerHTML = campaigns.map(c => `
+    tbody.innerHTML = campaigns.map(c => {
+        const safeName = c.nombre.replace(/'/g, "\\'");
+        const failedCell = c.fallidos > 0
+            ? `<button class="btn-failed-link" onclick="showCampaignErrors(${c.id},'${safeName}')">${c.fallidos.toLocaleString()} <i class="ph ph-info"></i></button>`
+            : '0';
+        return `
         <tr>
             <td><strong>${escHtml(c.nombre)}</strong></td>
             <td><code>${escHtml(c.template_name)}</code></td>
@@ -330,13 +569,7 @@ function renderCampaignsTable(campaigns) {
             <td class="col-sent">${c.enviados.toLocaleString()}</td>
             <td class="col-delivered">${c.entregados.toLocaleString()}</td>
             <td class="col-read">${c.leidos.toLocaleString()}</td>
-            <td class="col-failed">
-                ${c.fallidos > 0
-                    ? `<button class="col-failed-btn" onclick="showCampaignErrors(${c.id}, '${escHtml(c.nombre)}')" title="Ver errores">
-                           ${c.fallidos.toLocaleString()} <i class="ph ph-info"></i>
-                       </button>`
-                    : '0'}
-            </td>
+            <td class="col-failed">${failedCell}</td>
             <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
             <td class="actions-cell">
                 ${['draft','paused'].includes(c.status) ? `
@@ -352,20 +585,21 @@ function renderCampaignsTable(campaigns) {
                         <i class="ph ph-trash"></i>
                     </button>` : ''}
             </td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 }
 
 // ── Campaign runner (loop en el browser) ──────
 
 async function startCampaign(id) {
     try {
-        const res = await fetch(`/api/campaigns/start?id=${id}`, { method: 'POST' });
+        const res = await authFetch(`/api/campaigns/start?id=${id}`, { method: 'POST' });
         if (!res.ok) return alert((await res.json()).error);
 
         activeCampaignId = id;
         campaignRunning  = true;
 
-        const camp = await (await fetch(`/api/campaigns/${id}`)).json();
+        const camp = await (await authFetch(`/api/campaigns/${id}`)).json();
         showMonitor(camp);
         subscribeToRealtime(id);
         loadCampaigns();
@@ -382,7 +616,7 @@ async function runCampaignLoop(campaignId) {
 
     while (campaignRunning) {
         // Revisar si fue pausada externamente
-        const campRes = await fetch(`/api/campaigns/${campaignId}`);
+        const campRes = await authFetch(`/api/campaigns/${campaignId}`);
         const camp    = await campRes.json();
         if (camp.status !== 'running') { campaignRunning = false; break; }
 
@@ -397,13 +631,13 @@ async function runCampaignLoop(campaignId) {
 
         if (!pending) {
             // Todos enviados → completar
-            await fetch(`/api/campaigns/complete?id=${campaignId}`, { method: 'POST' });
+            await authFetch(`/api/campaigns/complete?id=${campaignId}`, { method: 'POST' });
             campaignRunning = false;
             break;
         }
 
         // Enviar via API
-        await fetch('/api/send', {
+        await authFetch('/api/send', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify({
@@ -419,7 +653,7 @@ async function runCampaignLoop(campaignId) {
 
 async function pauseCampaign(id) {
     campaignRunning = false;
-    await fetch(`/api/campaigns/pause?id=${id}`, { method: 'POST' });
+    await authFetch(`/api/campaigns/pause?id=${id}`, { method: 'POST' });
     loadCampaigns();
 }
 
@@ -429,7 +663,7 @@ async function pauseActiveCampaign() {
 
 async function deleteCampaign(id) {
     if (!confirm('¿Eliminar esta campaña?')) return;
-    await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/campaigns/${id}`, { method: 'DELETE' });
     loadCampaigns();
 }
 
@@ -508,208 +742,213 @@ function addFeedEntry(telefono, status, label) {
 
 async function openCampaignModal() {
     document.getElementById('modal-campaign').style.display = 'flex';
-    selectedTemplate = null;
-    document.getElementById('btn-create-campaign').disabled = true;
-    document.getElementById('template-preview-box').style.display = 'none';
-    document.getElementById('template-fields').style.display = 'none';
     await updateContactPreview();
-    await fetchTemplates(false);
-}
-
-function closeCampaignModal() {
-    document.getElementById('modal-campaign').style.display = 'none';
-    document.getElementById('form-campaign').reset();
-    document.getElementById('f-etiqueta-group').style.display = 'none';
-    document.getElementById('template-fields-inner').innerHTML = '';
-    document.getElementById('template-fields').style.display = 'none';
-    document.getElementById('template-preview-box').style.display = 'none';
-    selectedTemplate = null;
-}
-
-// ── Carga y renderiza plantillas de Meta ───────
-
-async function fetchTemplates(forceReload) {
-    const list = document.getElementById('template-list');
-    const icon = document.getElementById('reload-icon');
-    icon.classList.add('spin');
-    list.innerHTML = '<p class="template-loading"><i class="ph ph-spinner"></i> Cargando plantillas de Meta...</p>';
-
-    try {
-        const res  = await fetch('/api/templates');
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        renderTemplateList(data.templates || []);
-    } catch (err) {
-        list.innerHTML = `<p class="template-loading" style="color:#f87171"><i class="ph ph-warning"></i> ${escHtml(err.message)}</p>`;
-    } finally {
-        icon.classList.remove('spin');
+    // Cargar plantillas automáticamente (o usar caché si ya están)
+    if (cachedTemplates.length) {
+        renderTemplateCards(cachedTemplates);
+    } else {
+        loadTemplatesIntoModal();
     }
 }
 
-function renderTemplateList(templates) {
-    const list = document.getElementById('template-list');
+async function loadTemplatesIntoModal() {
+    const btn = document.getElementById('btn-load-templates');
+    btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i>';
+    btn.disabled  = true;
+    try {
+        const res  = await authFetch('/api/templates');
+        const data = await res.json();
+        if (!res.ok) {
+            document.getElementById('template-cards').innerHTML =
+                `<p class="tc-empty tc-error"><i class="ph ph-warning"></i> ${escHtml(data.error || 'Error al cargar plantillas.')}</p>`;
+        } else {
+            cachedTemplates = data.templates;
+            renderTemplateCards(data.templates);
+        }
+    } catch {
+        document.getElementById('template-cards').innerHTML =
+            `<p class="tc-empty tc-error"><i class="ph ph-warning"></i> Error de conexión. Verifica la configuración.</p>`;
+    } finally {
+        btn.innerHTML = '<i class="ph ph-arrows-clockwise"></i> Actualizar plantillas';
+        btn.disabled  = false;
+    }
+}
+
+// ─── Tarjetas de plantillas ─────────────────────
+
+function renderTemplateCards(templates) {
+    const grid = document.getElementById('template-cards');
     if (!templates.length) {
-        list.innerHTML = '<p class="template-loading">No se encontraron plantillas aprobadas en tu cuenta de Meta.</p>';
+        grid.innerHTML = '<p class="tc-empty">No hay plantillas aprobadas en esta cuenta.</p>';
         return;
     }
-    list.innerHTML = templates.map(t => {
-        const body = t.components?.find(c => c.type === 'BODY')?.text || '';
+    grid.innerHTML = templates.map(t => {
+        const bodyComp   = t.components?.find(c => c.type === 'BODY');
         const headerComp = t.components?.find(c => c.type === 'HEADER');
-        const headerBadge = headerComp
-            ? `<span class="tmpl-badge">${headerComp.format || headerComp.type}</span>`
-            : '';
+        const preview    = bodyComp?.text?.slice(0, 90) || '(sin texto de cuerpo)';
+        const more       = (bodyComp?.text?.length ?? 0) > 90 ? '…' : '';
+        const mediaIcon  = headerComp?.format === 'IMAGE'    ? '<i class="ph ph-image tc-media-icon"></i>'
+                         : headerComp?.format === 'VIDEO'    ? '<i class="ph ph-video tc-media-icon"></i>'
+                         : headerComp?.format === 'DOCUMENT' ? '<i class="ph ph-file tc-media-icon"></i>'
+                         : '';
+        // Escapar comillas simples para onclick
+        const safeName = t.name.replace(/'/g, "\\'");
         return `
-        <div class="tmpl-card" data-name="${escHtml(t.name)}" data-lang="${escHtml(t.language)}" onclick="selectTemplate(this, ${JSON.stringify(JSON.stringify(t)).slice(1,-1)})">
-            <div class="tmpl-card-header">
-                <span class="tmpl-name">${escHtml(t.name)}</span>
-                <div style="display:flex;gap:.3rem;align-items:center">
-                    ${headerBadge}
-                    <span class="tmpl-badge">${escHtml(t.language)}</span>
-                </div>
+        <div class="tc-card" data-name="${escHtml(t.name)}" onclick="selectTemplate('${safeName}')">
+            <div class="tc-top">
+                <strong class="tc-name">${mediaIcon}${escHtml(t.name)}</strong>
+                <span class="tag tag-lang">${escHtml(t.language)}</span>
             </div>
-            <p class="tmpl-body">${escHtml(body.slice(0, 100))}${body.length > 100 ? '…' : ''}</p>
+            <p class="tc-preview">${escHtml(preview)}${more}</p>
         </div>`;
     }).join('');
 }
 
-function selectTemplate(el, templateJson) {
-    // Marcar selección visual
-    document.querySelectorAll('.tmpl-card').forEach(c => c.classList.remove('selected'));
-    el.classList.add('selected');
+function selectTemplate(name) {
+    const template = cachedTemplates.find(t => t.name === name);
+    if (!template) return;
 
-    const template = JSON.parse(templateJson);
-    selectedTemplate = template;
+    // Resaltar la tarjeta seleccionada
+    document.querySelectorAll('.tc-card').forEach(c => c.classList.remove('tc-selected'));
+    const card = document.querySelector(`.tc-card[data-name="${CSS.escape(name)}"]`);
+    if (card) card.classList.add('tc-selected');
 
-    // Llenar campos ocultos
+    // Actualizar inputs ocultos
     document.getElementById('f-template').value = template.name;
-    document.getElementById('f-language').value = template.language;
+    document.getElementById('f-language').value  = template.language;
 
-    // Mostrar preview del cuerpo
-    const bodyComp = template.components?.find(c => c.type === 'BODY');
-    const previewBox = document.getElementById('template-preview-box');
-    if (bodyComp?.text) {
-        document.getElementById('template-preview-body').textContent = bodyComp.text;
-        previewBox.style.display = 'block';
-    } else {
-        previewBox.style.display = 'none';
-    }
+    // Hint con idioma
+    document.getElementById('f-template-hint').textContent =
+        `Plantilla seleccionada: ${template.name}  ·  Idioma: ${template.language}`;
 
     // Generar campos dinámicos
-    buildDynamicFields(template.components || []);
-
-    document.getElementById('btn-create-campaign').disabled = false;
+    generateDynamicFields(template);
 }
 
-function buildDynamicFields(components) {
-    const container = document.getElementById('template-fields-inner');
-    const wrapper   = document.getElementById('template-fields');
+function generateDynamicFields(template) {
+    const container  = document.getElementById('f-dynamic-fields');
     container.innerHTML = '';
 
-    const fields = [];
+    const components = template.components || [];
+    const headerComp = components.find(c => c.type === 'HEADER');
+    const bodyComp   = components.find(c => c.type === 'BODY');
 
-    components.forEach(comp => {
-        if (comp.type === 'HEADER') {
-            if (comp.format === 'IMAGE') {
-                fields.push({ id: 'dyn-header-image', label: '📷 Imagen del header', type: 'image',
-                    placeholder: 'https://ejemplo.com/imagen.jpg', component: 'header', paramType: 'image' });
-            } else if (comp.format === 'VIDEO') {
-                fields.push({ id: 'dyn-header-video', label: '🎥 Video del header (URL)', type: 'text',
-                    placeholder: 'https://ejemplo.com/video.mp4', component: 'header', paramType: 'video' });
-            } else if (comp.format === 'DOCUMENT') {
-                fields.push({ id: 'dyn-header-doc', label: '📄 Documento del header (URL)', type: 'text',
-                    placeholder: 'https://ejemplo.com/doc.pdf', component: 'header', paramType: 'document' });
-            } else if (comp.format === 'TEXT') {
-                // Header de texto con variable {{1}}
-                const vars = (comp.text || '').match(/\{\{\d+\}\}/g) || [];
-                vars.forEach((v, i) => {
-                    fields.push({ id: `dyn-header-var-${i+1}`, label: `Header — Variable ${v}`, type: 'text',
-                        placeholder: `Valor para ${v}`, component: 'header', paramType: 'text', varIndex: i });
-                });
-            }
-        }
+    let hasFields = false;
 
-        if (comp.type === 'BODY') {
-            const vars = (comp.text || '').match(/\{\{\d+\}\}/g) || [];
-            vars.forEach((v, i) => {
-                fields.push({ id: `dyn-body-var-${i+1}`, label: `Variable ${v} del mensaje`, type: 'text',
-                    placeholder: `Valor para ${v}`, component: 'body', paramType: 'text', varIndex: i });
+    // ── Campo de URL para header multimedia ──
+    if (headerComp && ['IMAGE','VIDEO','DOCUMENT'].includes(headerComp.format)) {
+        hasFields = true;
+        const fmt     = headerComp.format;
+        const iconCls = fmt === 'IMAGE' ? 'ph-image' : fmt === 'VIDEO' ? 'ph-video' : 'ph-file';
+        const label   = fmt === 'IMAGE' ? 'imagen' : fmt === 'VIDEO' ? 'video' : 'documento';
+        const example = fmt === 'IMAGE' ? 'jpg' : fmt === 'VIDEO' ? 'mp4' : 'pdf';
+        container.insertAdjacentHTML('beforeend', `
+            <div class="form-group">
+                <label><i class="ph ${iconCls}"></i> URL del ${label} (encabezado)</label>
+                <input type="text" id="df-header-url" class="glass-select"
+                    placeholder="https://ejemplo.com/archivo.${example}"
+                    data-param-type="header" data-media-type="${fmt.toLowerCase()}">
+                ${fmt === 'IMAGE' ? `
+                <div id="df-img-preview" class="img-preview" style="display:none">
+                    <img id="df-img-tag" src="" alt="Vista previa">
+                </div>` : ''}
+            </div>
+        `);
+
+        if (fmt === 'IMAGE') {
+            document.getElementById('df-header-url').addEventListener('input', e => {
+                const url     = e.target.value.trim();
+                const preview = document.getElementById('df-img-preview');
+                const img     = document.getElementById('df-img-tag');
+                if (url) { img.src = url; preview.style.display = 'block'; }
+                else     { preview.style.display = 'none'; }
             });
         }
-    });
-
-    if (!fields.length) {
-        wrapper.style.display = 'none';
-        return;
     }
 
-    fields.forEach(f => {
-        const div = document.createElement('div');
-        div.className = 'form-group';
-        div.innerHTML = `
-            <label>${escHtml(f.label)}</label>
-            <input type="text" id="${f.id}" class="glass-select" placeholder="${escHtml(f.placeholder)}" data-component="${f.component}" data-param-type="${f.paramType}" ${f.varIndex !== undefined ? `data-var-index="${f.varIndex}"` : ''}>
-            ${f.type === 'image' ? `<div id="dyn-img-preview" style="display:none;margin-top:.5rem;border-radius:8px;overflow:hidden;max-width:180px;border:1px solid rgba(255,255,255,.1)"><img id="dyn-img-thumb" style="width:100%;display:block;max-height:100px;object-fit:cover"></div>` : ''}`;
-        container.appendChild(div);
+    // ── Campos para variables {{N}} del cuerpo ──
+    if (bodyComp?.text) {
+        const nums = [...new Set(
+            [...bodyComp.text.matchAll(/\{\{(\d+)\}\}/g)].map(m => parseInt(m[1]))
+        )].sort((a, b) => a - b);
 
-        // Preview live para imágenes
-        if (f.type === 'image') {
-            div.querySelector(`#${f.id}`).addEventListener('input', e => {
-                const url = e.target.value.trim();
-                const prev = div.querySelector('#dyn-img-preview');
-                const thumb = div.querySelector('#dyn-img-thumb');
-                if (url) { thumb.src = url; thumb.onload = () => prev.style.display='block'; thumb.onerror = () => prev.style.display='none'; }
-                else { prev.style.display='none'; }
-            });
-        }
-    });
+        nums.forEach(num => {
+            hasFields = true;
+            // Mostrar la frase que rodea la variable como contexto
+            const ctx = bodyComp.text.replace(/\{\{(\d+)\}\}/g, (_, n) =>
+                parseInt(n) === num ? `【→ {{${n}}}】` : `{{${n}}}`
+            );
+            container.insertAdjacentHTML('beforeend', `
+                <div class="form-group">
+                    <label>Variable <code>{{${num}}}</code> del cuerpo</label>
+                    <input type="text" id="df-body-${num}" class="glass-select"
+                        placeholder="Valor para {{${num}}}"
+                        data-param-type="body" data-var-num="${num}">
+                    <small class="field-updated ctx-hint">${escHtml(ctx.slice(0,100))}${ctx.length > 100 ? '…' : ''}</small>
+                </div>
+            `);
+        });
+    }
 
-    wrapper.style.display = 'block';
+    if (hasFields) {
+        container.insertAdjacentHTML('afterbegin', `
+            <div class="dynamic-fields-title">
+                <i class="ph ph-sliders"></i> Parámetros de la plantilla
+            </div>
+        `);
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
 }
 
 function buildTemplateParams() {
-    if (!selectedTemplate) return [];
-
-    const components = selectedTemplate.components || [];
-    const result = [];
+    const params = [];
 
     // Header
-    const headerComp = components.find(c => c.type === 'HEADER');
-    if (headerComp) {
-        const headerInputs = document.querySelectorAll('[data-component="header"]');
-        const params = [];
-        headerInputs.forEach(inp => {
-            const val = inp.value.trim();
-            if (!val) return;
-            const pt = inp.dataset.paramType;
-            if (pt === 'image')    params.push({ type: 'image',    image:    { link: val } });
-            else if (pt === 'video')    params.push({ type: 'video',    video:    { link: val } });
-            else if (pt === 'document') params.push({ type: 'document', document: { link: val } });
-            else if (pt === 'text')     params.push({ type: 'text', text: val });
+    const headerInput = document.querySelector('[data-param-type="header"]');
+    if (headerInput?.value.trim()) {
+        const mediaType = headerInput.dataset.mediaType; // 'image', 'video', 'document'
+        params.push({
+            type: 'header',
+            parameters: [{ type: mediaType, [mediaType]: { link: headerInput.value.trim() } }]
         });
-        if (params.length) result.push({ type: 'header', parameters: params });
     }
 
-    // Body variables
-    const bodyInputs = [...document.querySelectorAll('[data-component="body"]')]
-        .sort((a, b) => parseInt(a.dataset.varIndex) - parseInt(b.dataset.varIndex));
+    // Body
+    const bodyInputs = [...document.querySelectorAll('[data-param-type="body"]')]
+        .sort((a, b) => parseInt(a.dataset.varNum) - parseInt(b.dataset.varNum));
     if (bodyInputs.length) {
-        const params = bodyInputs.map(inp => ({ type: 'text', text: inp.value.trim() || ' ' }));
-        result.push({ type: 'body', parameters: params });
+        params.push({
+            type: 'body',
+            parameters: bodyInputs.map(inp => ({ type: 'text', text: inp.value.trim() }))
+        });
     }
 
-    return result;
+    return params;
 }
-
+function closeCampaignModal() {
+    document.getElementById('modal-campaign').style.display = 'none';
+    document.getElementById('form-campaign').reset();
+    document.getElementById('f-etiqueta-group').style.display = 'none';
+    // Limpiar selección de plantilla y campos dinámicos
+    document.querySelectorAll('.tc-card').forEach(c => c.classList.remove('tc-selected'));
+    const dynFields = document.getElementById('f-dynamic-fields');
+    dynFields.innerHTML = '';
+    dynFields.style.display = 'none';
+    document.getElementById('f-template-hint').textContent = 'Haz clic en una plantilla para seleccionarla';
+}
 async function updateContactPreview() {
     const source   = document.getElementById('f-source').value;
     const etiqueta = document.getElementById('f-etiqueta').value.trim();
     try {
+        let url = '/api/contacts/count';
         if (source === 'etiqueta' && etiqueta) {
             const { count } = await sb.from('contacts').select('*', { count:'exact', head:true }).eq('etiqueta', etiqueta);
             document.getElementById('preview-count').textContent = `${(count ?? 0).toLocaleString()} contactos serán incluidos`;
             return;
         }
-        const res  = await fetch('/api/contacts/count');
+        const res  = await authFetch(url);
         const data = await res.json();
         document.getElementById('preview-count').textContent = `${(data.count ?? 0).toLocaleString()} contactos serán incluidos`;
     } catch {
@@ -719,18 +958,23 @@ async function updateContactPreview() {
 
 async function submitCampaign(e) {
     e.preventDefault();
-    if (!selectedTemplate) return alert('Selecciona una plantilla primero.');
+
+    const templateName = document.getElementById('f-template').value.trim();
+    if (!templateName) {
+        alert('Selecciona una plantilla antes de continuar.');
+        return;
+    }
+
     showLoader(true, 'Creando campaña...');
     try {
-        const templateParams = buildTemplateParams();
-        const res = await fetch('/api/campaigns', {
+        const res  = await authFetch('/api/campaigns', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 nombre:           document.getElementById('f-nombre').value.trim(),
-                templateName:     selectedTemplate.name,
-                templateLanguage: selectedTemplate.language,
-                templateParams,
+                templateName,
+                templateLanguage: document.getElementById('f-language').value,
+                templateParams:   buildTemplateParams(),
                 source:           document.getElementById('f-source').value,
                 etiqueta:         document.getElementById('f-etiqueta').value.trim() || undefined
             })
@@ -746,36 +990,51 @@ async function submitCampaign(e) {
     }
 }
 
-// ── Modal errores de campaña ───────────────────
+// ─────────────────────────────────────────────
+// Modal de errores por campaña
+// ─────────────────────────────────────────────
 
-async function showCampaignErrors(campaignId, campaignName) {
-    document.getElementById('errors-campaign-name').textContent = campaignName;
-    document.getElementById('errors-list').innerHTML = '<p style="opacity:.5;text-align:center;padding:2rem">Cargando...</p>';
-    document.getElementById('modal-errors').style.display = 'flex';
-
-    const { data: messages, error } = await sb
-        .from('campaign_messages')
-        .select('telefono, error')
-        .eq('campaign_id', campaignId)
-        .eq('status', 'failed')
-        .order('id', { ascending: false })
-        .limit(200);
-
-    if (error || !messages?.length) {
-        document.getElementById('errors-list').innerHTML =
-            `<p style="opacity:.5;text-align:center;padding:2rem">${error ? 'Error al cargar.' : 'No se encontraron errores registrados.'}</p>`;
-        return;
-    }
-
-    document.getElementById('errors-list').innerHTML = messages.map(m => `
-        <div style="padding:.6rem .75rem;border-radius:8px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15)">
-            <p style="font-weight:600;font-size:.82rem;margin-bottom:.2rem">${escHtml(m.telefono)}</p>
-            <p style="font-size:.75rem;color:#f87171">${escHtml(m.error || 'Sin mensaje de error')}</p>
-        </div>`).join('');
+function setupErrorsModal() {
+    document.getElementById('errors-close').addEventListener('click', closeErrorsModal);
+    document.getElementById('errors-overlay').addEventListener('click', closeErrorsModal);
 }
 
 function closeErrorsModal() {
     document.getElementById('modal-errors').style.display = 'none';
+}
+
+async function showCampaignErrors(id, name) {
+    document.getElementById('errors-campaign-name').textContent =
+        `Campaña: ${name}`;
+    document.getElementById('errors-list').innerHTML =
+        '<div class="errors-loading"><i class="ph ph-circle-notch ph-spin"></i> Cargando errores...</div>';
+    document.getElementById('modal-errors').style.display = 'flex';
+
+    const { data, error } = await sb
+        .from('campaign_messages')
+        .select('telefono, error, updated_at')
+        .eq('campaign_id', id)
+        .eq('status', 'failed')
+        .order('updated_at', { ascending: false });
+
+    if (error) {
+        document.getElementById('errors-list').innerHTML =
+            '<div class="errors-loading">Error al consultar la base de datos.</div>';
+        return;
+    }
+
+    if (!data?.length) {
+        document.getElementById('errors-list').innerHTML =
+            '<div class="errors-loading">No se encontraron errores detallados.</div>';
+        return;
+    }
+
+    document.getElementById('errors-list').innerHTML = data.map(m => `
+        <div class="error-row">
+            <span class="error-phone"><i class="ph ph-phone"></i> ${escHtml(m.telefono)}</span>
+            <span class="error-msg">${escHtml(m.error || 'Error desconocido')}</span>
+        </div>
+    `).join('');
 }
 
 // ─────────────────────────────────────────────
@@ -793,4 +1052,10 @@ function escHtml(str) {
                       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', async () => {
+    setupAuth();
+    await checkAuth();
+    // init() se llama solo si ya hay sesión activa
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) init();
+});

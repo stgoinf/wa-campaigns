@@ -29,7 +29,8 @@ module.exports = async function handler(req, res) {
 
         if (tmplData.error) throw new Error(tmplData.error.message);
 
-        res.json({ templates: tmplData.data || [] });
+        const templates = tmplData.data || [];
+        res.json({ templates, total: templates.length });
 
     } catch (err) {
         res.status(500).json({ error: err.message });
