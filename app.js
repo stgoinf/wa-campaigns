@@ -292,6 +292,21 @@ function setupCampaigns() {
     });
     document.getElementById('f-etiqueta').addEventListener('input', updateContactPreview);
 
+    // Preview de imagen de header
+    document.getElementById('f-header-image').addEventListener('input', e => {
+        const url = e.target.value.trim();
+        const preview = document.getElementById('header-image-preview');
+        const thumb   = document.getElementById('header-image-thumb');
+        if (url) {
+            thumb.src = url;
+            thumb.onload  = () => { preview.style.display = 'block'; };
+            thumb.onerror = () => { preview.style.display = 'none'; };
+        } else {
+            preview.style.display = 'none';
+            thumb.src = '';
+        }
+    });
+
     // Modal de errores
     document.getElementById('modal-errors-close').addEventListener('click', closeErrorsModal);
     document.getElementById('modal-errors-cancel').addEventListener('click', closeErrorsModal);
@@ -511,6 +526,8 @@ function closeCampaignModal() {
     document.getElementById('modal-campaign').style.display = 'none';
     document.getElementById('form-campaign').reset();
     document.getElementById('f-etiqueta-group').style.display = 'none';
+    document.getElementById('header-image-preview').style.display = 'none';
+    document.getElementById('header-image-thumb').src = '';
 }
 async function updateContactPreview() {
     const source   = document.getElementById('f-source').value;
