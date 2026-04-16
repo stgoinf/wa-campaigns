@@ -1,13 +1,24 @@
-// GET    /api/contacts?page=1&limit=50&search=&etiqueta=
-// DELETE /api/contacts?id=123
+// GET    /api/contacts?page=1&limit=50&search=&etiqueta=   → lista paginada
+// GET    /api/contacts?count=true                         → solo el total { count: N }
+// DELETE /api/contacts?id=123                             → eliminar contacto
 
 const { adminClient } = require('../_lib/supabase');
 
 module.exports = async function handler(req, res) {
     const sb = adminClient();
 
-    // ── GET: lista paginada ──────────────────────────────────────────────────
+    // ── GET ──────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
+        // Modo count-only (reemplaza a /api/contacts/count)
+        if (req.query.count === 'true') {
+            const { count, error } = await sb
+                .from('contacts')
+                .select('*', { count: 'exact', head: true });
+            if (error) return res.status(500).json({ error: error.message });
+            return res.json({ count: count || 0 });
+        }
+
+        // Lista paginada
         const page     = Math.max(1, parseInt(req.query.page  || '1'));
         const limit    = Math.min(100, Math.max(1, parseInt(req.query.limit || '50')));
         const search   = (req.query.search   || '').trim();
