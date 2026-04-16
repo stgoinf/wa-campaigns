@@ -594,6 +594,60 @@ header p { color: var(--text-secondary); }
     .monitor-kpis { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ── Template picker ── */
+.template-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 2px;
+}
+.template-loading {
+    text-align: center;
+    opacity: .5;
+    padding: 1.5rem;
+    font-size: .85rem;
+    margin: 0;
+}
+.tmpl-card {
+    padding: .75rem 1rem;
+    border-radius: 10px;
+    border: 1.5px solid var(--border-color);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+}
+.tmpl-card:hover { border-color: rgba(74,222,128,.5); background: rgba(74,222,128,.04); }
+.tmpl-card.selected { border-color: var(--accent-green); background: rgba(74,222,128,.07); }
+.tmpl-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .3rem;
+}
+.tmpl-name { font-weight: 700; font-size: .85rem; font-family: monospace; }
+.tmpl-body { font-size: .78rem; opacity: .6; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tmpl-badge {
+    font-size: .68rem;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    font-weight: 600;
+}
+.template-preview-box {
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    margin-bottom: .25rem;
+}
+.template-preview-box p { margin: 0; font-size: .82rem; opacity: .8; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin .8s linear infinite; display: inline-block; }
+
 /* ── Botón de errores en tabla ── */
 .col-failed-btn {
     display: inline-flex;

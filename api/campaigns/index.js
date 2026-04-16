@@ -21,17 +21,12 @@ module.exports = async function handler(req, res) {
     if (req.method === 'POST') {
         const {
             nombre, templateName, templateLanguage = 'es',
-            headerImageUrl, source = 'all', etiqueta
+            templateParams = [], source = 'all', etiqueta
         } = req.body;
 
         if (!nombre || !templateName) {
             return res.status(400).json({ error: 'nombre y templateName son obligatorios' });
         }
-
-        // Construir template_params: si hay imagen de header, incluirla como componente
-        const templateParams = headerImageUrl
-            ? [{ type: 'header', parameters: [{ type: 'image', image: { link: headerImageUrl } }] }]
-            : [];
 
         // Obtener contactos según la fuente
         let query = sb.from('contacts').select('telefono');

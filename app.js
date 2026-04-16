@@ -277,6 +277,8 @@ function downloadCSV() {
 // ══ CAMPAÑAS ══════════════════════════════════
 // ═══════════════════════════════════════════════
 
+let selectedTemplate = null; // plantilla actualmente seleccionada en el modal
+
 function setupCampaigns() {
     document.getElementById('btn-new-campaign').addEventListener('click', openCampaignModal);
     document.getElementById('modal-close').addEventListener('click', closeCampaignModal);
@@ -285,27 +287,13 @@ function setupCampaigns() {
     document.getElementById('btn-refresh-campaigns').addEventListener('click', loadCampaigns);
     document.getElementById('btn-pause-campaign').addEventListener('click', pauseActiveCampaign);
     document.getElementById('form-campaign').addEventListener('submit', submitCampaign);
+    document.getElementById('btn-reload-templates').addEventListener('click', () => fetchTemplates(true));
     document.getElementById('f-source').addEventListener('change', e => {
         document.getElementById('f-etiqueta-group').style.display =
             e.target.value === 'etiqueta' ? 'block' : 'none';
         updateContactPreview();
     });
     document.getElementById('f-etiqueta').addEventListener('input', updateContactPreview);
-
-    // Preview de imagen de header
-    document.getElementById('f-header-image').addEventListener('input', e => {
-        const url = e.target.value.trim();
-        const preview = document.getElementById('header-image-preview');
-        const thumb   = document.getElementById('header-image-thumb');
-        if (url) {
-            thumb.src = url;
-            thumb.onload  = () => { preview.style.display = 'block'; };
-            thumb.onerror = () => { preview.style.display = 'none'; };
-        } else {
-            preview.style.display = 'none';
-            thumb.src = '';
-        }
-    });
 
     // Modal de errores
     document.getElementById('modal-errors-close').addEventListener('click', closeErrorsModal);
@@ -520,26 +508,208 @@ function addFeedEntry(telefono, status, label) {
 
 async function openCampaignModal() {
     document.getElementById('modal-campaign').style.display = 'flex';
+    selectedTemplate = null;
+    document.getElementById('btn-create-campaign').disabled = true;
+    document.getElementById('template-preview-box').style.display = 'none';
+    document.getElementById('template-fields').style.display = 'none';
     await updateContactPreview();
+    await fetchTemplates(false);
 }
+
 function closeCampaignModal() {
     document.getElementById('modal-campaign').style.display = 'none';
     document.getElementById('form-campaign').reset();
     document.getElementById('f-etiqueta-group').style.display = 'none';
-    document.getElementById('header-image-preview').style.display = 'none';
-    document.getElementById('header-image-thumb').src = '';
+    document.getElementById('template-fields-inner').innerHTML = '';
+    document.getElementById('template-fields').style.display = 'none';
+    document.getElementById('template-preview-box').style.display = 'none';
+    selectedTemplate = null;
 }
+
+// ── Carga y renderiza plantillas de Meta ───────
+
+async function fetchTemplates(forceReload) {
+    const list = document.getElementById('template-list');
+    const icon = document.getElementById('reload-icon');
+    icon.classList.add('spin');
+    list.innerHTML = '<p class="template-loading"><i class="ph ph-spinner"></i> Cargando plantillas de Meta...</p>';
+
+    try {
+        const res  = await fetch('/api/templates');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        renderTemplateList(data.templates || []);
+    } catch (err) {
+        list.innerHTML = `<p class="template-loading" style="color:#f87171"><i class="ph ph-warning"></i> ${escHtml(err.message)}</p>`;
+    } finally {
+        icon.classList.remove('spin');
+    }
+}
+
+function renderTemplateList(templates) {
+    const list = document.getElementById('template-list');
+    if (!templates.length) {
+        list.innerHTML = '<p class="template-loading">No se encontraron plantillas aprobadas en tu cuenta de Meta.</p>';
+        return;
+    }
+    list.innerHTML = templates.map(t => {
+        const body = t.components?.find(c => c.type === 'BODY')?.text || '';
+        const headerComp = t.components?.find(c => c.type === 'HEADER');
+        const headerBadge = headerComp
+            ? `<span class="tmpl-badge">${headerComp.format || headerComp.type}</span>`
+            : '';
+        return `
+        <div class="tmpl-card" data-name="${escHtml(t.name)}" data-lang="${escHtml(t.language)}" onclick="selectTemplate(this, ${JSON.stringify(JSON.stringify(t)).slice(1,-1)})">
+            <div class="tmpl-card-header">
+                <span class="tmpl-name">${escHtml(t.name)}</span>
+                <div style="display:flex;gap:.3rem;align-items:center">
+                    ${headerBadge}
+                    <span class="tmpl-badge">${escHtml(t.language)}</span>
+                </div>
+            </div>
+            <p class="tmpl-body">${escHtml(body.slice(0, 100))}${body.length > 100 ? '…' : ''}</p>
+        </div>`;
+    }).join('');
+}
+
+function selectTemplate(el, templateJson) {
+    // Marcar selección visual
+    document.querySelectorAll('.tmpl-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+
+    const template = JSON.parse(templateJson);
+    selectedTemplate = template;
+
+    // Llenar campos ocultos
+    document.getElementById('f-template').value = template.name;
+    document.getElementById('f-language').value = template.language;
+
+    // Mostrar preview del cuerpo
+    const bodyComp = template.components?.find(c => c.type === 'BODY');
+    const previewBox = document.getElementById('template-preview-box');
+    if (bodyComp?.text) {
+        document.getElementById('template-preview-body').textContent = bodyComp.text;
+        previewBox.style.display = 'block';
+    } else {
+        previewBox.style.display = 'none';
+    }
+
+    // Generar campos dinámicos
+    buildDynamicFields(template.components || []);
+
+    document.getElementById('btn-create-campaign').disabled = false;
+}
+
+function buildDynamicFields(components) {
+    const container = document.getElementById('template-fields-inner');
+    const wrapper   = document.getElementById('template-fields');
+    container.innerHTML = '';
+
+    const fields = [];
+
+    components.forEach(comp => {
+        if (comp.type === 'HEADER') {
+            if (comp.format === 'IMAGE') {
+                fields.push({ id: 'dyn-header-image', label: '📷 Imagen del header', type: 'image',
+                    placeholder: 'https://ejemplo.com/imagen.jpg', component: 'header', paramType: 'image' });
+            } else if (comp.format === 'VIDEO') {
+                fields.push({ id: 'dyn-header-video', label: '🎥 Video del header (URL)', type: 'text',
+                    placeholder: 'https://ejemplo.com/video.mp4', component: 'header', paramType: 'video' });
+            } else if (comp.format === 'DOCUMENT') {
+                fields.push({ id: 'dyn-header-doc', label: '📄 Documento del header (URL)', type: 'text',
+                    placeholder: 'https://ejemplo.com/doc.pdf', component: 'header', paramType: 'document' });
+            } else if (comp.format === 'TEXT') {
+                // Header de texto con variable {{1}}
+                const vars = (comp.text || '').match(/\{\{\d+\}\}/g) || [];
+                vars.forEach((v, i) => {
+                    fields.push({ id: `dyn-header-var-${i+1}`, label: `Header — Variable ${v}`, type: 'text',
+                        placeholder: `Valor para ${v}`, component: 'header', paramType: 'text', varIndex: i });
+                });
+            }
+        }
+
+        if (comp.type === 'BODY') {
+            const vars = (comp.text || '').match(/\{\{\d+\}\}/g) || [];
+            vars.forEach((v, i) => {
+                fields.push({ id: `dyn-body-var-${i+1}`, label: `Variable ${v} del mensaje`, type: 'text',
+                    placeholder: `Valor para ${v}`, component: 'body', paramType: 'text', varIndex: i });
+            });
+        }
+    });
+
+    if (!fields.length) {
+        wrapper.style.display = 'none';
+        return;
+    }
+
+    fields.forEach(f => {
+        const div = document.createElement('div');
+        div.className = 'form-group';
+        div.innerHTML = `
+            <label>${escHtml(f.label)}</label>
+            <input type="text" id="${f.id}" class="glass-select" placeholder="${escHtml(f.placeholder)}" data-component="${f.component}" data-param-type="${f.paramType}" ${f.varIndex !== undefined ? `data-var-index="${f.varIndex}"` : ''}>
+            ${f.type === 'image' ? `<div id="dyn-img-preview" style="display:none;margin-top:.5rem;border-radius:8px;overflow:hidden;max-width:180px;border:1px solid rgba(255,255,255,.1)"><img id="dyn-img-thumb" style="width:100%;display:block;max-height:100px;object-fit:cover"></div>` : ''}`;
+        container.appendChild(div);
+
+        // Preview live para imágenes
+        if (f.type === 'image') {
+            div.querySelector(`#${f.id}`).addEventListener('input', e => {
+                const url = e.target.value.trim();
+                const prev = div.querySelector('#dyn-img-preview');
+                const thumb = div.querySelector('#dyn-img-thumb');
+                if (url) { thumb.src = url; thumb.onload = () => prev.style.display='block'; thumb.onerror = () => prev.style.display='none'; }
+                else { prev.style.display='none'; }
+            });
+        }
+    });
+
+    wrapper.style.display = 'block';
+}
+
+function buildTemplateParams() {
+    if (!selectedTemplate) return [];
+
+    const components = selectedTemplate.components || [];
+    const result = [];
+
+    // Header
+    const headerComp = components.find(c => c.type === 'HEADER');
+    if (headerComp) {
+        const headerInputs = document.querySelectorAll('[data-component="header"]');
+        const params = [];
+        headerInputs.forEach(inp => {
+            const val = inp.value.trim();
+            if (!val) return;
+            const pt = inp.dataset.paramType;
+            if (pt === 'image')    params.push({ type: 'image',    image:    { link: val } });
+            else if (pt === 'video')    params.push({ type: 'video',    video:    { link: val } });
+            else if (pt === 'document') params.push({ type: 'document', document: { link: val } });
+            else if (pt === 'text')     params.push({ type: 'text', text: val });
+        });
+        if (params.length) result.push({ type: 'header', parameters: params });
+    }
+
+    // Body variables
+    const bodyInputs = [...document.querySelectorAll('[data-component="body"]')]
+        .sort((a, b) => parseInt(a.dataset.varIndex) - parseInt(b.dataset.varIndex));
+    if (bodyInputs.length) {
+        const params = bodyInputs.map(inp => ({ type: 'text', text: inp.value.trim() || ' ' }));
+        result.push({ type: 'body', parameters: params });
+    }
+
+    return result;
+}
+
 async function updateContactPreview() {
     const source   = document.getElementById('f-source').value;
     const etiqueta = document.getElementById('f-etiqueta').value.trim();
     try {
-        let url = '/api/contacts/count';
         if (source === 'etiqueta' && etiqueta) {
             const { count } = await sb.from('contacts').select('*', { count:'exact', head:true }).eq('etiqueta', etiqueta);
             document.getElementById('preview-count').textContent = `${(count ?? 0).toLocaleString()} contactos serán incluidos`;
             return;
         }
-        const res  = await fetch(url);
+        const res  = await fetch('/api/contacts/count');
         const data = await res.json();
         document.getElementById('preview-count').textContent = `${(data.count ?? 0).toLocaleString()} contactos serán incluidos`;
     } catch {
@@ -549,17 +719,18 @@ async function updateContactPreview() {
 
 async function submitCampaign(e) {
     e.preventDefault();
+    if (!selectedTemplate) return alert('Selecciona una plantilla primero.');
     showLoader(true, 'Creando campaña...');
     try {
-        const headerImageUrl = document.getElementById('f-header-image').value.trim() || undefined;
-        const res  = await fetch('/api/campaigns', {
+        const templateParams = buildTemplateParams();
+        const res = await fetch('/api/campaigns', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 nombre:           document.getElementById('f-nombre').value.trim(),
-                templateName:     document.getElementById('f-template').value.trim(),
-                templateLanguage: document.getElementById('f-language').value,
-                headerImageUrl,
+                templateName:     selectedTemplate.name,
+                templateLanguage: selectedTemplate.language,
+                templateParams,
                 source:           document.getElementById('f-source').value,
                 etiqueta:         document.getElementById('f-etiqueta').value.trim() || undefined
             })

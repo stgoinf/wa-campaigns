@@ -237,43 +237,39 @@
         </div>
 
         <form id="form-campaign">
+            <!-- Nombre de campaña -->
             <div class="form-group">
                 <label>Nombre de la campaña</label>
                 <input type="text" id="f-nombre" class="glass-select" placeholder="Ej: Promo Enero 2025" required>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Nombre de la plantilla (Meta)</label>
-                    <input type="text" id="f-template" class="glass-select" placeholder="Ej: promo_enero" required>
-                    <small>Nombre exacto de la plantilla aprobada en tu cuenta de Meta</small>
-                </div>
-                <div class="form-group">
-                    <label>Código de idioma</label>
-                    <input type="text" id="f-language" class="glass-select" list="language-options" placeholder="Ej: es, es_MX, en_US">
-                    <datalist id="language-options">
-                        <option value="es">Español</option>
-                        <option value="es_ES">Español (España)</option>
-                        <option value="es_MX">Español (México)</option>
-                        <option value="es_AR">Español (Argentina)</option>
-                        <option value="en_US">Inglés (EE.UU.)</option>
-                        <option value="en_GB">Inglés (Reino Unido)</option>
-                        <option value="pt_BR">Portugués (Brasil)</option>
-                        <option value="fr">Francés</option>
-                    </datalist>
-                    <small>Copia el código exacto que aparece en tu plantilla en Meta Business</small>
-                </div>
-            </div>
-
+            <!-- Selector de plantilla -->
             <div class="form-group">
-                <label>URL de imagen para header <span style="font-weight:400;opacity:.6">(opcional)</span></label>
-                <input type="text" id="f-header-image" class="glass-select" placeholder="https://ejemplo.com/imagen.jpg" autocomplete="off">
-                <small>Si tu plantilla tiene un header de imagen, pega aquí la URL pública.</small>
-                <div id="header-image-preview" style="display:none;margin-top:.6rem;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);max-width:200px">
-                    <img id="header-image-thumb" src="" alt="Preview" style="width:100%;display:block;object-fit:cover;max-height:110px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                    <label style="margin:0">Plantilla de WhatsApp</label>
+                    <button type="button" id="btn-reload-templates" class="icon-btn" title="Recargar plantillas" style="font-size:.75rem;display:flex;align-items:center;gap:.3rem;padding:4px 8px;border-radius:6px">
+                        <i class="ph ph-arrows-clockwise" id="reload-icon"></i> Recargar
+                    </button>
                 </div>
+                <div id="template-list" class="template-list">
+                    <p class="template-loading"><i class="ph ph-spinner"></i> Cargando plantillas...</p>
+                </div>
+                <!-- Campos ocultos que se llenan al seleccionar plantilla -->
+                <input type="hidden" id="f-template">
+                <input type="hidden" id="f-language">
             </div>
 
+            <!-- Vista previa de la plantilla seleccionada -->
+            <div id="template-preview-box" style="display:none" class="template-preview-box">
+                <p id="template-preview-body" style="font-size:.82rem;line-height:1.5;white-space:pre-wrap"></p>
+            </div>
+
+            <!-- Campos dinámicos según componentes de la plantilla -->
+            <div id="template-fields" style="display:none">
+                <div id="template-fields-inner"></div>
+            </div>
+
+            <!-- Contactos -->
             <div class="form-group">
                 <label>Contactos a enviar</label>
                 <select id="f-source" class="glass-select">
@@ -296,7 +292,7 @@
 
             <div class="modal-actions">
                 <button type="button" class="btn-ghost" id="modal-cancel">Cancelar</button>
-                <button type="submit" class="btn-primary">
+                <button type="submit" class="btn-primary" id="btn-create-campaign" disabled>
                     <i class="ph ph-paper-plane-tilt"></i> Crear Campaña
                 </button>
             </div>
