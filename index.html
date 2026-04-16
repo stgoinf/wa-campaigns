@@ -24,7 +24,39 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="dashboard-container">
+
+<!-- ─── Pantalla de Login ─── -->
+<div id="login-screen" class="login-screen">
+    <div class="login-card glass-panel">
+        <div class="login-brand">
+            <i class="ph-fill ph-whatsapp-logo"></i>
+            <h1>WA Campaigns</h1>
+            <p>Inicia sesión para continuar</p>
+        </div>
+
+        <form id="form-login">
+            <div class="form-group">
+                <label for="login-email">Correo electrónico</label>
+                <input type="email" id="login-email" class="glass-select" placeholder="tucorreo@empresa.com" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="login-password">Contraseña</label>
+                <div class="password-wrapper">
+                    <input type="password" id="login-password" class="glass-select" placeholder="••••••••" required>
+                    <button type="button" id="toggle-password" class="icon-btn password-toggle">
+                        <i class="ph ph-eye" id="toggle-icon"></i>
+                    </button>
+                </div>
+            </div>
+            <p id="login-error" class="login-error" style="display:none"></p>
+            <button type="submit" class="btn-primary btn-login" id="btn-login">
+                <i class="ph ph-sign-in"></i> Entrar
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="dashboard-container" id="app" style="display:none">
 
     <!-- ─── Sidebar ─── -->
     <aside class="sidebar">
@@ -40,6 +72,9 @@
             </a>
             <a class="nav-item" data-tab="campaigns">
                 <i class="ph ph-paper-plane-tilt"></i> Campañas
+            </a>
+            <a class="nav-item" data-tab="config">
+                <i class="ph ph-gear"></i> Configuración
             </a>
         </nav>
 
@@ -76,6 +111,17 @@
         <div class="contacts-badge" id="contacts-badge" style="display:none">
             <i class="ph ph-address-book"></i>
             <span id="contacts-count">0</span> contactos en DB
+        </div>
+
+        <!-- Usuario activo + logout -->
+        <div class="user-bar">
+            <div class="user-info">
+                <i class="ph ph-user-circle"></i>
+                <span id="user-email" class="user-email"></span>
+            </div>
+            <button id="btn-logout" class="icon-btn" title="Cerrar sesión">
+                <i class="ph ph-sign-out"></i>
+            </button>
         </div>
     </aside>
 
@@ -224,6 +270,88 @@
             </div>
         </div>
 
+        <!-- ════════ Tab: Configuración ════════ -->
+        <div id="tab-config" class="tab-panel">
+            <header>
+                <div class="header-titles">
+                    <h1>Configuración</h1>
+                    <p>Credenciales de WhatsApp Business API</p>
+                </div>
+            </header>
+
+            <!-- Tarjeta de credenciales -->
+            <div class="glass-panel config-card">
+                <div class="config-section-title">
+                    <i class="ph-fill ph-whatsapp-logo"></i>
+                    <div>
+                        <h2>WhatsApp Business API</h2>
+                        <p>Consigue estos datos en <strong>Meta for Developers → tu app → WhatsApp → API Setup</strong></p>
+                    </div>
+                </div>
+
+                <form id="form-config">
+                    <div class="form-group">
+                        <label>
+                            Access Token
+                            <span class="label-hint">Token permanente (System User) — nunca expira</span>
+                        </label>
+                        <div class="password-wrapper">
+                            <input type="password" id="cfg-token" class="glass-select"
+                                placeholder="EAABzA..." autocomplete="off">
+                            <button type="button" class="icon-btn password-toggle" data-target="cfg-token">
+                                <i class="ph ph-eye"></i>
+                            </button>
+                        </div>
+                        <small id="cfg-token-updated" class="field-updated"></small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>
+                                Phone Number ID
+                                <span class="label-hint">ID del número (no el número en sí)</span>
+                            </label>
+                            <input type="text" id="cfg-phone-id" class="glass-select"
+                                placeholder="1234567890">
+                            <small id="cfg-phone-updated" class="field-updated"></small>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                Business Account ID
+                                <span class="label-hint">Para consultar plantillas</span>
+                            </label>
+                            <input type="text" id="cfg-business-id" class="glass-select"
+                                placeholder="0987654321">
+                            <small id="cfg-business-updated" class="field-updated"></small>
+                        </div>
+                    </div>
+
+                    <div class="config-actions">
+                        <button type="submit" class="btn-primary" id="btn-save-config">
+                            <i class="ph ph-floppy-disk"></i> Guardar
+                        </button>
+                        <button type="button" class="btn-test" id="btn-test-connection">
+                            <i class="ph ph-plugs"></i> Probar conexión
+                        </button>
+                    </div>
+
+                    <p id="config-msg" class="config-msg" style="display:none"></p>
+                </form>
+            </div>
+
+            <!-- Plantillas disponibles -->
+            <div class="glass-panel config-card" id="templates-panel" style="display:none">
+                <div class="config-section-title">
+                    <i class="ph ph-list-bullets"></i>
+                    <div>
+                        <h2>Plantillas aprobadas</h2>
+                        <p id="templates-subtitle">Conecta tu cuenta para ver las plantillas</p>
+                    </div>
+                </div>
+                <div id="templates-list" class="templates-list"></div>
+            </div>
+        </div>
+
     </main>
 </div>
 
@@ -237,39 +365,31 @@
         </div>
 
         <form id="form-campaign">
-            <!-- Nombre de campaña -->
             <div class="form-group">
                 <label>Nombre de la campaña</label>
                 <input type="text" id="f-nombre" class="glass-select" placeholder="Ej: Promo Enero 2025" required>
             </div>
 
-            <!-- Selector de plantilla -->
             <div class="form-group">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-                    <label style="margin:0">Plantilla de WhatsApp</label>
-                    <button type="button" id="btn-reload-templates" class="icon-btn" title="Recargar plantillas" style="font-size:.75rem;display:flex;align-items:center;gap:.3rem;padding:4px 8px;border-radius:6px">
-                        <i class="ph ph-arrows-clockwise" id="reload-icon"></i> Recargar
+                <label>
+                    Plantilla de WhatsApp
+                    <button type="button" id="btn-load-templates" class="btn-inline">
+                        <i class="ph ph-arrows-clockwise"></i> Actualizar plantillas
                     </button>
+                </label>
+                <!-- Cuadrícula de tarjetas (se rellena al abrir el modal) -->
+                <div id="template-cards" class="template-picker-grid">
+                    <p class="tc-empty"><i class="ph ph-circle-notch ph-spin"></i> Cargando plantillas...</p>
                 </div>
-                <div id="template-list" class="template-list">
-                    <p class="template-loading"><i class="ph ph-spinner"></i> Cargando plantillas...</p>
-                </div>
-                <!-- Campos ocultos que se llenan al seleccionar plantilla -->
-                <input type="hidden" id="f-template">
-                <input type="hidden" id="f-language">
+                <!-- Inputs ocultos que se rellenan al seleccionar una tarjeta -->
+                <input type="hidden" id="f-template" required>
+                <input type="hidden" id="f-language" value="es">
+                <small id="f-template-hint">Haz clic en una plantilla para seleccionarla</small>
             </div>
 
-            <!-- Vista previa de la plantilla seleccionada -->
-            <div id="template-preview-box" style="display:none" class="template-preview-box">
-                <p id="template-preview-body" style="font-size:.82rem;line-height:1.5;white-space:pre-wrap"></p>
-            </div>
+            <!-- Campos dinámicos según la plantilla seleccionada -->
+            <div id="f-dynamic-fields" style="display:none"></div>
 
-            <!-- Campos dinámicos según componentes de la plantilla -->
-            <div id="template-fields" style="display:none">
-                <div id="template-fields-inner"></div>
-            </div>
-
-            <!-- Contactos -->
             <div class="form-group">
                 <label>Contactos a enviar</label>
                 <select id="f-source" class="glass-select">
@@ -292,7 +412,7 @@
 
             <div class="modal-actions">
                 <button type="button" class="btn-ghost" id="modal-cancel">Cancelar</button>
-                <button type="submit" class="btn-primary" id="btn-create-campaign" disabled>
+                <button type="submit" class="btn-primary">
                     <i class="ph ph-paper-plane-tilt"></i> Crear Campaña
                 </button>
             </div>
@@ -302,19 +422,14 @@
 
 <!-- ─── Modal: Errores de campaña ─── -->
 <div id="modal-errors" class="modal" style="display:none">
-    <div class="modal-overlay" id="modal-errors-overlay"></div>
-    <div class="modal-card glass-panel" style="max-width:560px;width:90%">
+    <div class="modal-overlay" id="errors-overlay"></div>
+    <div class="modal-card glass-panel">
         <div class="modal-header">
-            <h2><i class="ph ph-x-circle" style="color:#ef4444"></i> Mensajes Fallidos</h2>
-            <button class="icon-btn" id="modal-errors-close"><i class="ph ph-x"></i></button>
+            <h2><i class="ph ph-warning-circle"></i> Mensajes fallidos</h2>
+            <button class="icon-btn" id="errors-close"><i class="ph ph-x"></i></button>
         </div>
-        <p id="errors-campaign-name" style="font-size:.85rem;opacity:.6;margin-bottom:1rem"></p>
-        <div id="errors-list" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:.5rem">
-            <p style="opacity:.5;text-align:center;padding:2rem">Cargando...</p>
-        </div>
-        <div class="modal-actions" style="margin-top:1.25rem">
-            <button type="button" class="btn-ghost" id="modal-errors-cancel">Cerrar</button>
-        </div>
+        <p id="errors-campaign-name" class="errors-subtitle"></p>
+        <div id="errors-list" class="errors-list"></div>
     </div>
 </div>
 
