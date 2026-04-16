@@ -259,6 +259,12 @@
             </div>
 
             <div class="form-group">
+                <label>URL de imagen para header <span style="font-weight:400;opacity:.6">(opcional)</span></label>
+                <input type="url" id="f-header-image" class="glass-select" placeholder="https://ejemplo.com/imagen.jpg">
+                <small>Si tu plantilla tiene un header de imagen, pega aquí la URL pública de la imagen.</small>
+            </div>
+
+            <div class="form-group">
                 <label>Contactos a enviar</label>
                 <select id="f-source" class="glass-select">
                     <option value="all">Todos los contactos en DB</option>
@@ -285,6 +291,24 @@
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- ─── Modal: Errores de campaña ─── -->
+<div id="modal-errors" class="modal" style="display:none">
+    <div class="modal-overlay" id="modal-errors-overlay"></div>
+    <div class="modal-card glass-panel" style="max-width:560px;width:90%">
+        <div class="modal-header">
+            <h2><i class="ph ph-x-circle" style="color:#ef4444"></i> Mensajes Fallidos</h2>
+            <button class="icon-btn" id="modal-errors-close"><i class="ph ph-x"></i></button>
+        </div>
+        <p id="errors-campaign-name" style="font-size:.85rem;opacity:.6;margin-bottom:1rem"></p>
+        <div id="errors-list" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:.5rem">
+            <p style="opacity:.5;text-align:center;padding:2rem">Cargando...</p>
+        </div>
+        <div class="modal-actions" style="margin-top:1.25rem">
+            <button type="button" class="btn-ghost" id="modal-errors-cancel">Cerrar</button>
+        </div>
     </div>
 </div>
 
