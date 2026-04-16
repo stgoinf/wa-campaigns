@@ -291,6 +291,11 @@ function setupCampaigns() {
         updateContactPreview();
     });
     document.getElementById('f-etiqueta').addEventListener('input', updateContactPreview);
+
+    // Modal de errores
+    document.getElementById('modal-errors-close').addEventListener('click', closeErrorsModal);
+    document.getElementById('modal-errors-cancel').addEventListener('click', closeErrorsModal);
+    document.getElementById('modal-errors-overlay').addEventListener('click', closeErrorsModal);
 }
 
 async function loadCampaigns() {
@@ -322,7 +327,13 @@ function renderCampaignsTable(campaigns) {
             <td class="col-sent">${c.enviados.toLocaleString()}</td>
             <td class="col-delivered">${c.entregados.toLocaleString()}</td>
             <td class="col-read">${c.leidos.toLocaleString()}</td>
-            <td class="col-failed">${c.fallidos.toLocaleString()}</td>
+            <td class="col-failed">
+                ${c.fallidos > 0
+                    ? `<button class="col-failed-btn" onclick="showCampaignErrors(${c.id}, '${escHtml(c.nombre)}')" title="Ver errores">
+                           ${c.fallidos.toLocaleString()} <i class="ph ph-info"></i>
+                       </button>`
+                    : '0'}
+            </td>
             <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
             <td class="actions-cell">
                 ${['draft','paused'].includes(c.status) ? `
@@ -523,6 +534,7 @@ async function submitCampaign(e) {
     e.preventDefault();
     showLoader(true, 'Creando campaña...');
     try {
+        const headerImageUrl = document.getElementById('f-header-image').value.trim() || undefined;
         const res  = await fetch('/api/campaigns', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -530,6 +542,7 @@ async function submitCampaign(e) {
                 nombre:           document.getElementById('f-nombre').value.trim(),
                 templateName:     document.getElementById('f-template').value.trim(),
                 templateLanguage: document.getElementById('f-language').value,
+                headerImageUrl,
                 source:           document.getElementById('f-source').value,
                 etiqueta:         document.getElementById('f-etiqueta').value.trim() || undefined
             })
@@ -543,6 +556,38 @@ async function submitCampaign(e) {
         showLoader(false);
         alert('Error: ' + err.message);
     }
+}
+
+// ── Modal errores de campaña ───────────────────
+
+async function showCampaignErrors(campaignId, campaignName) {
+    document.getElementById('errors-campaign-name').textContent = campaignName;
+    document.getElementById('errors-list').innerHTML = '<p style="opacity:.5;text-align:center;padding:2rem">Cargando...</p>';
+    document.getElementById('modal-errors').style.display = 'flex';
+
+    const { data: messages, error } = await sb
+        .from('campaign_messages')
+        .select('telefono, error')
+        .eq('campaign_id', campaignId)
+        .eq('status', 'failed')
+        .order('id', { ascending: false })
+        .limit(200);
+
+    if (error || !messages?.length) {
+        document.getElementById('errors-list').innerHTML =
+            `<p style="opacity:.5;text-align:center;padding:2rem">${error ? 'Error al cargar.' : 'No se encontraron errores registrados.'}</p>`;
+        return;
+    }
+
+    document.getElementById('errors-list').innerHTML = messages.map(m => `
+        <div style="padding:.6rem .75rem;border-radius:8px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15)">
+            <p style="font-weight:600;font-size:.82rem;margin-bottom:.2rem">${escHtml(m.telefono)}</p>
+            <p style="font-size:.75rem;color:#f87171">${escHtml(m.error || 'Sin mensaje de error')}</p>
+        </div>`).join('');
+}
+
+function closeErrorsModal() {
+    document.getElementById('modal-errors').style.display = 'none';
 }
 
 // ─────────────────────────────────────────────

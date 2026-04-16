@@ -593,3 +593,20 @@ header p { color: var(--text-secondary); }
     .main-content { max-width: 100%; padding: 1rem; }
     .monitor-kpis { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── Botón de errores en tabla ── */
+.col-failed-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    background: transparent;
+    border: none;
+    color: #f87171;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: inherit;
+    padding: 2px 6px;
+    border-radius: 6px;
+    transition: background .15s;
+}
+.col-failed-btn:hover { background: rgba(239,68,68,.12); }
