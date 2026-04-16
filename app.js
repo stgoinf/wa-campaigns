@@ -144,6 +144,7 @@ function init() {
     setupAnalytics();
     setupConfig();
     setupCampaigns();
+    setupContacts();
     setupErrorsModal();
     refreshContactsCount();
 }
@@ -161,6 +162,7 @@ function setupNavigation() {
             document.getElementById(`tab-${tab}`).classList.add('active');
             document.getElementById('filters-panel').style.display = tab === 'analytics' ? 'block' : 'none';
             if (tab === 'campaigns') loadCampaigns();
+            if (tab === 'contacts')  loadContacts();
             if (tab === 'config')    loadConfig();
         });
     });
@@ -988,6 +990,296 @@ async function submitCampaign(e) {
         showLoader(false);
         alert('Error: ' + err.message);
     }
+}
+
+// ═══════════════════════════════════════════════
+// ══ CLIENTES ══════════════════════════════════
+// ═══════════════════════════════════════════════
+
+let contactsCurrentPage = 1;
+let contactsCurrentSearch = '';
+let contactsCurrentEtiqueta = '';
+
+function setupContacts() {
+    // Botón importar
+    document.getElementById('btn-import-contacts').addEventListener('click', openContactsImportModal);
+    document.getElementById('btn-refresh-contacts').addEventListener('click', () => loadContacts());
+
+    // Búsqueda con debounce
+    let searchTimer;
+    document.getElementById('contacts-search').addEventListener('input', e => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            contactsCurrentSearch   = e.target.value.trim();
+            contactsCurrentPage     = 1;
+            loadContacts();
+        }, 400);
+    });
+
+    // Filtro de etiqueta
+    document.getElementById('contacts-etiqueta-filter').addEventListener('change', e => {
+        contactsCurrentEtiqueta = e.target.value;
+        contactsCurrentPage     = 1;
+        loadContacts();
+    });
+
+    // Paginación
+    document.getElementById('btn-contacts-prev').addEventListener('click', () => {
+        if (contactsCurrentPage > 1) { contactsCurrentPage--; loadContacts(); }
+    });
+    document.getElementById('btn-contacts-next').addEventListener('click', () => {
+        contactsCurrentPage++;
+        loadContacts();
+    });
+
+    // Modal de importación
+    setupContactsImportModal();
+}
+
+async function loadContacts(page = contactsCurrentPage, search = contactsCurrentSearch, etiqueta = contactsCurrentEtiqueta) {
+    contactsCurrentPage     = page;
+    contactsCurrentSearch   = search;
+    contactsCurrentEtiqueta = etiqueta;
+
+    const tbody = document.getElementById('contacts-tbody');
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="ph ph-circle-notch ph-spin"></i><p>Cargando contactos...</p></td></tr>`;
+
+    try {
+        const params = new URLSearchParams({ page, limit: 50 });
+        if (search)   params.set('search',   search);
+        if (etiqueta) params.set('etiqueta', etiqueta);
+
+        const res  = await authFetch(`/api/contacts?${params}`);
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+
+        renderContactsTable(data.contacts, data.total);
+        renderContactsPagination(data.page, data.pages, data.total);
+        loadContactsStats();
+        populateEtiquetaFilter(data.contacts);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="ph ph-warning"></i><p>Error al cargar contactos: ${escHtml(err.message)}</p></td></tr>`;
+    }
+}
+
+function renderContactsTable(contacts, total) {
+    const tbody = document.getElementById('contacts-tbody');
+
+    if (!contacts.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">
+            <i class="ph ph-address-book"></i>
+            <p>${contactsCurrentSearch || contactsCurrentEtiqueta ? 'No se encontraron contactos con ese filtro.' : 'No hay contactos. Importa un CSV para comenzar.'}</p>
+        </td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = contacts.map(c => {
+        const nombre   = c.nombre   ? escHtml(c.nombre)   : '<span class="dim">—</span>';
+        const etiqueta = c.etiqueta ? `<span class="tag tag-lang">${escHtml(c.etiqueta)}</span>` : '<span class="dim">—</span>';
+        const created  = c.created_at ? new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+        let lastSent = '<span class="dim">Nunca enviado</span>';
+        if (c.last_sent_at) {
+            const date = new Date(c.last_sent_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' });
+            const tmpl = c.last_template ? `<small class="last-template">${escHtml(c.last_template)}</small>` : '';
+            lastSent = `<span class="last-sent-date">${date}</span>${tmpl}`;
+        }
+
+        return `<tr>
+            <td><code class="phone-code">${escHtml(c.telefono)}</code></td>
+            <td>${nombre}</td>
+            <td>${etiqueta}</td>
+            <td class="last-sent-cell">${lastSent}</td>
+            <td class="dim">${created}</td>
+            <td class="actions-cell">
+                <button class="btn-icon-red" onclick="deleteContact(${c.id}, '${escHtml(c.telefono)}')" title="Eliminar">
+                    <i class="ph ph-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderContactsPagination(page, pages, total) {
+    const wrap  = document.getElementById('contacts-pagination');
+    const label = document.getElementById('contacts-page-label');
+    const prev  = document.getElementById('btn-contacts-prev');
+    const next  = document.getElementById('btn-contacts-next');
+
+    if (pages <= 1) { wrap.style.display = 'none'; return; }
+
+    wrap.style.display    = 'flex';
+    label.textContent     = `Página ${page} de ${pages}  ·  ${total.toLocaleString()} contactos`;
+    prev.disabled         = page <= 1;
+    next.disabled         = page >= pages;
+}
+
+async function loadContactsStats() {
+    try {
+        // Total
+        const resTotal  = await authFetch('/api/contacts/count');
+        const { count } = await resTotal.json();
+
+        // Con envío
+        const { count: sentCount } = await sb
+            .from('contacts').select('*', { count: 'exact', head: true })
+            .not('last_sent_at', 'is', null);
+
+        document.getElementById('cstat-total').textContent = (count || 0).toLocaleString();
+        document.getElementById('cstat-sent').textContent  = (sentCount || 0).toLocaleString();
+        document.getElementById('cstat-never').textContent = ((count || 0) - (sentCount || 0)).toLocaleString();
+    } catch { /* silencioso */ }
+}
+
+function populateEtiquetaFilter(contacts) {
+    const sel      = document.getElementById('contacts-etiqueta-filter');
+    const current  = sel.value;
+    const existing = new Set([...sel.options].map(o => o.value).filter(v => v));
+    contacts.forEach(c => {
+        if (c.etiqueta && !existing.has(c.etiqueta)) {
+            existing.add(c.etiqueta);
+            sel.insertAdjacentHTML('beforeend', `<option value="${escHtml(c.etiqueta)}">${escHtml(c.etiqueta)}</option>`);
+        }
+    });
+    sel.value = current;
+}
+
+async function deleteContact(id, telefono) {
+    if (!confirm(`¿Eliminar el contacto ${telefono}?`)) return;
+    try {
+        const res = await authFetch(`/api/contacts?id=${id}`, { method: 'DELETE' });
+        if (!res.ok) { const d = await res.json(); return alert(d.error || 'Error al eliminar.'); }
+        loadContacts();
+        refreshContactsCount();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+// ── Modal de importación de contactos ──────────
+
+function setupContactsImportModal() {
+    const dropzone = document.getElementById('contacts-dropzone');
+    const fileInput= document.getElementById('contacts-csv-input');
+    const submitBtn= document.getElementById('contacts-import-submit');
+
+    // Click en la dropzone → abrir selector de archivo
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // Drag & drop
+    dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dropzone-over'); });
+    dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('dropzone-over'));
+    dropzone.addEventListener('drop',      e  => {
+        e.preventDefault();
+        dropzone.classList.remove('dropzone-over');
+        const file = e.dataTransfer.files[0];
+        if (file) setContactsFile(file);
+    });
+
+    // Selección normal de archivo
+    fileInput.addEventListener('change', e => {
+        if (e.target.files[0]) setContactsFile(e.target.files[0]);
+    });
+
+    // Botones
+    document.getElementById('contacts-import-close').addEventListener('click',  closeContactsImportModal);
+    document.getElementById('contacts-import-cancel').addEventListener('click', closeContactsImportModal);
+    document.getElementById('contacts-import-overlay').addEventListener('click', closeContactsImportModal);
+    submitBtn.addEventListener('click', () => {
+        const file = fileInput.files[0];
+        if (file) submitContactsImport(file);
+    });
+}
+
+function setContactsFile(file) {
+    const nameEl   = document.getElementById('contacts-import-filename');
+    const submitBtn= document.getElementById('contacts-import-submit');
+    const resultEl = document.getElementById('contacts-import-result');
+    nameEl.textContent  = `📄 ${file.name}`;
+    nameEl.style.display= 'block';
+    submitBtn.disabled  = false;
+    resultEl.style.display = 'none';
+    // Asignar al input para que submitContactsImport pueda leerlo
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('contacts-csv-input').files = dt.files;
+}
+
+function openContactsImportModal() {
+    document.getElementById('modal-contacts-import').style.display = 'flex';
+    document.getElementById('contacts-import-result').style.display   = 'none';
+    document.getElementById('contacts-import-filename').style.display = 'none';
+    document.getElementById('contacts-import-submit').disabled = true;
+    document.getElementById('contacts-csv-input').value = '';
+}
+
+function closeContactsImportModal() {
+    document.getElementById('modal-contacts-import').style.display = 'none';
+}
+
+async function submitContactsImport(file) {
+    const btn      = document.getElementById('contacts-import-submit');
+    const resultEl = document.getElementById('contacts-import-result');
+    btn.disabled   = true;
+    btn.innerHTML  = '<i class="ph ph-circle-notch ph-spin"></i> Importando...';
+    resultEl.style.display = 'none';
+
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async results => {
+            const fields   = Object.keys(results.data[0] || {});
+            const phoneCol = ['telefono','Telefono','Teléfono','phone','Phone','celular','Celular','cel','Cel','Tel','tel']
+                .find(c => fields.includes(c)) ?? fields[0];
+            const nameCol  = ['nombre','Nombre','name','Name'].find(c => fields.includes(c));
+            const labelCol = ['etiqueta','Etiqueta','label','Label','segmento','Segmento'].find(c => fields.includes(c));
+
+            const contacts = results.data.map(r => ({
+                telefono:  String(r[phoneCol] ?? '').replace(/\D/g, ''),
+                nombre:    nameCol  ? r[nameCol]  || null : null,
+                etiqueta:  labelCol ? r[labelCol] || null : null
+            })).filter(c => c.telefono.length >= 8);
+
+            if (!contacts.length) {
+                resultEl.className    = 'import-result import-result-error';
+                resultEl.textContent  = 'No se encontraron números válidos. Verifica que el CSV tenga una columna "telefono".';
+                resultEl.style.display= 'block';
+                btn.disabled  = false;
+                btn.innerHTML = '<i class="ph ph-upload-simple"></i> Importar';
+                return;
+            }
+
+            try {
+                const res  = await authFetch('/api/contacts/upload', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ contacts })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Error al importar');
+
+                resultEl.className    = 'import-result import-result-ok';
+                resultEl.textContent  = `✅ ${data.inserted.toLocaleString()} contactos procesados · Total en DB: ${data.total.toLocaleString()}`;
+                resultEl.style.display= 'block';
+                loadContacts();
+                refreshContactsCount();
+            } catch (err) {
+                resultEl.className    = 'import-result import-result-error';
+                resultEl.textContent  = '❌ ' + err.message;
+                resultEl.style.display= 'block';
+            } finally {
+                btn.disabled  = false;
+                btn.innerHTML = '<i class="ph ph-upload-simple"></i> Importar';
+            }
+        },
+        error: err => {
+            resultEl.className    = 'import-result import-result-error';
+            resultEl.textContent  = 'Error al leer el archivo: ' + err.message;
+            resultEl.style.display= 'block';
+            btn.disabled  = false;
+            btn.innerHTML = '<i class="ph ph-upload-simple"></i> Importar';
+        }
+    });
 }
 
 // ─────────────────────────────────────────────

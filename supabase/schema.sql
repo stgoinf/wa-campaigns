@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS contacts (
     telefono   TEXT    NOT NULL UNIQUE,
     nombre     TEXT,
     etiqueta   TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    last_sent_at  TIMESTAMPTZ,
+    last_template TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_telefono ON contacts(telefono);
 CREATE INDEX IF NOT EXISTS idx_contacts_etiqueta ON contacts(etiqueta);

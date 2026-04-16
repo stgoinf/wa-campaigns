@@ -34,14 +34,22 @@ module.exports = async function handler(req, res) {
             camp.template_params || []
         );
 
+        const now = new Date().toISOString();
+
         // Actualizar mensaje como enviado
         await sb
             .from('campaign_messages')
-            .update({ status: 'sent', wa_message_id: waId, sent_at: new Date().toISOString() })
+            .update({ status: 'sent', wa_message_id: waId, sent_at: now })
             .eq('id', messageId);
 
         // Incrementar contador de enviados en la campaña
         await sb.rpc('increment_campaign_sent', { campaign_id: campaignId });
+
+        // Registrar último envío en el contacto (best-effort, no lanza error)
+        sb.from('contacts')
+          .update({ last_sent_at: now, last_template: camp.template_name })
+          .eq('telefono', telefono)
+          .then(() => {}).catch(() => {});
 
         res.json({ success: true, waMessageId: waId });
 
