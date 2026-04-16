@@ -250,7 +250,7 @@ async function syncContactsToBackend(rows) {
 
 async function refreshContactsCount() {
     try {
-        const res  = await authFetch('/api/contacts/count');
+        const res  = await authFetch('/api/contacts?count=true');
         const data = await res.json();
         if (data.count > 0) {
             contactsCount.textContent  = data.count.toLocaleString();
