@@ -1,14 +1,23 @@
-const GRAPH_URL = 'https://graph.facebook.com/v19.0';
+const GRAPH_URL       = 'https://graph.facebook.com/v19.0';
+const { getSettings } = require('./getSettings');
 
 async function sendTemplate(telefono, templateName, languageCode = 'es', components = []) {
+    const settings = await getSettings();
+    const token    = settings.wa_access_token;
+    const phoneId  = settings.wa_phone_number_id;
+
+    if (!token || !phoneId) {
+        throw new Error('Credenciales de WhatsApp no configuradas. Ve a Configuración y guarda el Access Token y Phone Number ID.');
+    }
+
     const to = formatPhone(telefono);
 
     const res = await fetch(
-        `${GRAPH_URL}/${process.env.WA_PHONE_NUMBER_ID}/messages`,
+        `${GRAPH_URL}/${phoneId}/messages`,
         {
             method: 'POST',
             headers: {
-                Authorization:  `Bearer ${process.env.WA_ACCESS_TOKEN}`,
+                Authorization:  `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
