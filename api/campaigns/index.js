@@ -1,9 +1,13 @@
-// GET  /api/campaigns       → lista todas
+// GET  /api/campaigns       → lista todas (del usuario autenticado)
 // POST /api/campaigns       → crear nueva
 
 const { adminClient } = require('../_lib/supabase');
+const { getUserId }   = require('../_lib/auth');
 
 module.exports = async function handler(req, res) {
+    const userId = await getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
     const sb = adminClient();
 
     // ── GET ──────────────────────────────────────
@@ -11,10 +15,11 @@ module.exports = async function handler(req, res) {
         const { data, error } = await sb
             .from('campaigns')
             .select('*')
+            .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
         if (error) return res.status(500).json({ error: error.message });
-        return res.json(data);
+        return res.json({ campaigns: data || [] });
     }
 
     // ── POST ─────────────────────────────────────
@@ -28,15 +33,15 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'nombre y templateName son obligatorios' });
         }
 
-        // Obtener contactos según la fuente
-        let query = sb.from('contacts').select('telefono');
-        if (source === 'etiqueta' && etiqueta) query = query.eq('etiqueta', etiqueta);
+        // Obtener contactos del usuario según la fuente
+        let query = sb.from('contacts').select('telefono').eq('user_id', userId);
+        if (source === 'etiqueta' && etiqueta) query = query.contains('tags', [etiqueta]);
 
         const { data: contacts, error: cErr } = await query;
         if (cErr) return res.status(500).json({ error: cErr.message });
         if (!contacts.length) return res.status(400).json({ error: 'No hay contactos para esta selección' });
 
-        // Crear campaña
+        // Crear campaña con user_id
         const { data: camp, error: campErr } = await sb
             .from('campaigns')
             .insert({
@@ -44,7 +49,8 @@ module.exports = async function handler(req, res) {
                 template_name:     templateName,
                 template_language: templateLanguage,
                 template_params:   templateParams,
-                total:             contacts.length
+                total:             contacts.length,
+                user_id:           userId
             })
             .select()
             .single();

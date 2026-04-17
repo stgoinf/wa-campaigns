@@ -1,8 +1,8 @@
 const GRAPH_URL       = 'https://graph.facebook.com/v19.0';
 const { getSettings } = require('./getSettings');
 
-async function sendTemplate(telefono, templateName, languageCode = 'es', components = []) {
-    const settings = await getSettings();
+async function sendTemplate(telefono, templateName, languageCode = 'es', components = [], userId = null) {
+    const settings = await getSettings(userId);
     const token    = settings.wa_access_token;
     const phoneId  = settings.wa_phone_number_id;
 

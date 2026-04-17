@@ -20,6 +20,23 @@ async function checkAuth() {
 function showLogin() {
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
+    showLoginForm(); // asegura que siempre se muestre el form de login al salir
+}
+
+function showRegister() {
+    document.getElementById('form-login').style.display      = 'none';
+    document.getElementById('form-register').style.display   = 'block';
+    document.getElementById('toggle-to-register').style.display = 'none';
+    document.getElementById('toggle-to-login').style.display    = 'inline';
+    document.getElementById('auth-subtitle').textContent = 'Crea tu cuenta gratis';
+}
+
+function showLoginForm() {
+    document.getElementById('form-register').style.display   = 'none';
+    document.getElementById('form-login').style.display      = 'block';
+    document.getElementById('toggle-to-login').style.display    = 'none';
+    document.getElementById('toggle-to-register').style.display = 'inline';
+    document.getElementById('auth-subtitle').textContent = 'Inicia sesión para continuar';
 }
 
 function showApp(user) {
@@ -53,6 +70,46 @@ function setupAuth() {
 
         showApp(data.user);
         init();
+    });
+
+    // Toggle entre login y registro
+    document.getElementById('link-to-register').addEventListener('click', e => { e.preventDefault(); showRegister(); });
+    document.getElementById('link-to-login').addEventListener('click',    e => { e.preventDefault(); showLoginForm(); });
+
+    // Formulario de registro
+    document.getElementById('form-register').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email  = document.getElementById('reg-email').value.trim();
+        const pwd    = document.getElementById('reg-password').value;
+        const pwd2   = document.getElementById('reg-password2').value;
+        const errEl  = document.getElementById('reg-error');
+        const okEl   = document.getElementById('reg-success');
+        const btn    = document.getElementById('btn-register');
+
+        errEl.style.display = 'none';
+        okEl.style.display  = 'none';
+
+        if (pwd !== pwd2) {
+            errEl.textContent   = 'Las contraseñas no coinciden.';
+            errEl.style.display = 'block';
+            return;
+        }
+
+        btn.disabled  = true;
+        btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Creando cuenta...';
+
+        const { error } = await sb.auth.signUp({ email, password: pwd });
+
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="ph ph-user-plus"></i> Crear cuenta';
+
+        if (error) {
+            errEl.textContent   = error.message || 'Error al crear la cuenta.';
+            errEl.style.display = 'block';
+        } else {
+            okEl.style.display = 'block';
+            document.getElementById('form-register').reset();
+        }
     });
 
     // Toggle contraseña visible
@@ -541,7 +598,8 @@ async function loadCampaigns() {
     try {
         const res  = await authFetch('/api/campaigns');
         if (!res.ok) throw new Error(await res.text());
-        renderCampaignsTable(await res.json());
+        const data = await res.json();
+        renderCampaignsTable(data.campaigns || data); // compatible con formato nuevo { campaigns: [] } y antiguo []
     } catch {
         document.getElementById('campaigns-tbody').innerHTML = `
             <tr><td colspan="9" class="empty-state">
