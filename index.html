@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WA Campaigns</title>
+    <title>Camply</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,15 +25,16 @@
 </head>
 <body>
 
-<!-- ─── Pantalla de Login ─── -->
+<!-- ─── Pantalla de Login / Registro ─── -->
 <div id="login-screen" class="login-screen">
     <div class="login-card glass-panel">
         <div class="login-brand">
             <i class="ph-fill ph-whatsapp-logo"></i>
-            <h1>WA Campaigns</h1>
-            <p>Inicia sesión para continuar</p>
+            <h1>Camply</h1>
+            <p id="auth-subtitle">Inicia sesión para continuar</p>
         </div>
 
+        <!-- Formulario LOGIN -->
         <form id="form-login">
             <div class="form-group">
                 <label for="login-email">Correo electrónico</label>
@@ -53,6 +54,42 @@
                 <i class="ph ph-sign-in"></i> Entrar
             </button>
         </form>
+
+        <!-- Formulario REGISTRO (oculto por defecto) -->
+        <form id="form-register" style="display:none">
+            <div class="form-group">
+                <label for="reg-email">Correo electrónico</label>
+                <input type="email" id="reg-email" class="glass-select" placeholder="tucorreo@empresa.com" required>
+            </div>
+            <div class="form-group">
+                <label for="reg-password">Contraseña</label>
+                <input type="password" id="reg-password" class="glass-select"
+                    placeholder="Mínimo 8 caracteres" required minlength="8">
+            </div>
+            <div class="form-group">
+                <label for="reg-password2">Confirmar contraseña</label>
+                <input type="password" id="reg-password2" class="glass-select"
+                    placeholder="Repite la contraseña" required>
+            </div>
+            <p id="reg-error" class="login-error" style="display:none"></p>
+            <p id="reg-success" class="login-success" style="display:none">
+                <i class="ph ph-check-circle"></i>
+                ¡Revisa tu correo para confirmar tu cuenta!
+            </p>
+            <button type="submit" class="btn-primary btn-login" id="btn-register">
+                <i class="ph ph-user-plus"></i> Crear cuenta
+            </button>
+        </form>
+
+        <!-- Toggle entre login y registro -->
+        <div class="auth-toggle">
+            <span id="toggle-to-register">¿No tienes cuenta?
+                <a href="#" id="link-to-register">Regístrate gratis</a>
+            </span>
+            <span id="toggle-to-login" style="display:none">¿Ya tienes cuenta?
+                <a href="#" id="link-to-login">Inicia sesión</a>
+            </span>
+        </div>
     </div>
 </div>
 
@@ -62,7 +99,7 @@
     <aside class="sidebar">
         <div class="brand">
             <i class="ph-fill ph-whatsapp-logo"></i>
-            <h2>WA Campaigns</h2>
+            <h2>Camply</h2>
         </div>
 
         <!-- Navegación principal -->

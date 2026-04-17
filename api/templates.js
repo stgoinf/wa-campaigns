@@ -1,13 +1,17 @@
 // GET /api/templates
-// Devuelve las plantillas APPROVED desde la cuenta de Meta/WhatsApp Business
+// Devuelve las plantillas APPROVED desde la cuenta de Meta/WhatsApp Business del usuario
 
 const GRAPH_URL       = 'https://graph.facebook.com/v19.0';
 const { getSettings } = require('./_lib/getSettings');
+const { getUserId }   = require('./_lib/auth');
 
 module.exports = async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).end();
 
-    const settings = await getSettings();
+    const userId = await getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
+    const settings = await getSettings(userId);
     const token    = settings.wa_access_token;
     const wabaId   = settings.wa_business_account_id;
 
@@ -19,7 +23,6 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-        // Obtener plantillas aprobadas usando el Business Account ID configurado
         const url = `${GRAPH_URL}/${wabaId}/message_templates?status=APPROVED&limit=100&fields=name,language,status,components&access_token=${token}`;
         const tmplRes  = await fetch(url);
         const tmplData = await tmplRes.json();
