@@ -996,12 +996,15 @@ async function submitCampaign(e) {
 // ══ CLIENTES ══════════════════════════════════
 // ═══════════════════════════════════════════════
 
-let contactsCurrentPage = 1;
-let contactsCurrentSearch = '';
+let contactsCurrentPage     = 1;
+let contactsCurrentSearch   = '';
 let contactsCurrentEtiqueta = '';
+let contactsCurrentPreset   = '';
+let contactsCurrentFrom     = '';
+let contactsCurrentTo       = '';
+let contactsSelected        = new Set(); // ids seleccionados
 
 function setupContacts() {
-    // Botón importar
     document.getElementById('btn-import-contacts').addEventListener('click', openContactsImportModal);
     document.getElementById('btn-refresh-contacts').addEventListener('click', () => loadContacts());
 
@@ -1010,16 +1013,39 @@ function setupContacts() {
     document.getElementById('contacts-search').addEventListener('input', e => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
-            contactsCurrentSearch   = e.target.value.trim();
-            contactsCurrentPage     = 1;
+            contactsCurrentSearch = e.target.value.trim();
+            contactsCurrentPage   = 1;
             loadContacts();
         }, 400);
     });
 
-    // Filtro de etiqueta
+    // Filtro etiqueta
     document.getElementById('contacts-etiqueta-filter').addEventListener('change', e => {
         contactsCurrentEtiqueta = e.target.value;
         contactsCurrentPage     = 1;
+        loadContacts();
+    });
+
+    // Filtro último envío (preset)
+    document.getElementById('contacts-sent-preset').addEventListener('change', e => {
+        contactsCurrentPreset = e.target.value;
+        contactsCurrentPage   = 1;
+        const rangePanel = document.getElementById('contacts-date-range');
+        if (e.target.value === 'custom') {
+            rangePanel.style.display = 'flex';
+        } else {
+            rangePanel.style.display = 'none';
+            contactsCurrentFrom = '';
+            contactsCurrentTo   = '';
+            loadContacts();
+        }
+    });
+
+    // Aplicar rango de fechas personalizado
+    document.getElementById('btn-apply-date-range').addEventListener('click', () => {
+        contactsCurrentFrom = document.getElementById('contacts-sent-from').value;
+        contactsCurrentTo   = document.getElementById('contacts-sent-to').value;
+        contactsCurrentPage = 1;
         loadContacts();
     });
 
@@ -1032,33 +1058,54 @@ function setupContacts() {
         loadContacts();
     });
 
-    // Modal de importación
+    // Selección — "Seleccionar todos"
+    document.getElementById('contacts-check-all').addEventListener('change', e => {
+        document.querySelectorAll('.contact-row-check').forEach(cb => {
+            cb.checked = e.target.checked;
+            const id   = parseInt(cb.dataset.id);
+            e.target.checked ? contactsSelected.add(id) : contactsSelected.delete(id);
+        });
+        updateBulkBar();
+    });
+
+    // Barra de acciones en bloque
+    document.getElementById('btn-bulk-deselect').addEventListener('click', clearContactSelection);
+    document.getElementById('btn-bulk-apply').addEventListener('click', applyBulkEtiqueta);
+
     setupContactsImportModal();
 }
 
-async function loadContacts(page = contactsCurrentPage, search = contactsCurrentSearch, etiqueta = contactsCurrentEtiqueta) {
-    contactsCurrentPage     = page;
-    contactsCurrentSearch   = search;
-    contactsCurrentEtiqueta = etiqueta;
+async function loadContacts(page = contactsCurrentPage) {
+    contactsCurrentPage = page;
 
     const tbody = document.getElementById('contacts-tbody');
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="ph ph-circle-notch ph-spin"></i><p>Cargando contactos...</p></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="ph ph-circle-notch ph-spin"></i><p>Cargando contactos...</p></td></tr>`;
 
     try {
         const params = new URLSearchParams({ page, limit: 50 });
-        if (search)   params.set('search',   search);
-        if (etiqueta) params.set('etiqueta', etiqueta);
+        if (contactsCurrentSearch)   params.set('search',      contactsCurrentSearch);
+        if (contactsCurrentEtiqueta) params.set('etiqueta',    contactsCurrentEtiqueta);
+        if (contactsCurrentPreset)   params.set('sent_preset', contactsCurrentPreset);
+        if (contactsCurrentPreset === 'custom') {
+            if (contactsCurrentFrom) params.set('sent_from', contactsCurrentFrom);
+            if (contactsCurrentTo)   params.set('sent_to',   contactsCurrentTo);
+        }
 
         const res  = await authFetch(`/api/contacts?${params}`);
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
+
+        // Limpiar selección al cambiar de página
+        contactsSelected.clear();
+        document.getElementById('contacts-check-all').checked = false;
+        updateBulkBar();
 
         renderContactsTable(data.contacts, data.total);
         renderContactsPagination(data.page, data.pages, data.total);
         loadContactsStats();
         populateEtiquetaFilter(data.contacts);
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="ph ph-warning"></i><p>Error al cargar contactos: ${escHtml(err.message)}</p></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="ph ph-warning"></i><p>Error al cargar contactos: ${escHtml(err.message)}</p></td></tr>`;
     }
 }
 
@@ -1066,9 +1113,9 @@ function renderContactsTable(contacts, total) {
     const tbody = document.getElementById('contacts-tbody');
 
     if (!contacts.length) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">
             <i class="ph ph-address-book"></i>
-            <p>${contactsCurrentSearch || contactsCurrentEtiqueta ? 'No se encontraron contactos con ese filtro.' : 'No hay contactos. Importa un CSV para comenzar.'}</p>
+            <p>${contactsCurrentSearch || contactsCurrentEtiqueta || contactsCurrentPreset ? 'No se encontraron contactos con ese filtro.' : 'No hay contactos. Importa un CSV para comenzar.'}</p>
         </td></tr>`;
         return;
     }
@@ -1077,6 +1124,7 @@ function renderContactsTable(contacts, total) {
         const nombre   = c.nombre   ? escHtml(c.nombre)   : '<span class="dim">—</span>';
         const etiqueta = c.etiqueta ? `<span class="tag tag-lang">${escHtml(c.etiqueta)}</span>` : '<span class="dim">—</span>';
         const created  = c.created_at ? new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+        const checked  = contactsSelected.has(c.id) ? 'checked' : '';
 
         let lastSent = '<span class="dim">Nunca enviado</span>';
         if (c.last_sent_at) {
@@ -1085,7 +1133,11 @@ function renderContactsTable(contacts, total) {
             lastSent = `<span class="last-sent-date">${date}</span>${tmpl}`;
         }
 
-        return `<tr>
+        return `<tr class="${contactsSelected.has(c.id) ? 'row-selected' : ''}">
+            <td class="col-check">
+                <input type="checkbox" class="contact-row-check" data-id="${c.id}" ${checked}
+                    onchange="toggleContactSelect(${c.id}, this.checked)">
+            </td>
             <td><code class="phone-code">${escHtml(c.telefono)}</code></td>
             <td>${nombre}</td>
             <td>${etiqueta}</td>
@@ -1142,6 +1194,68 @@ function populateEtiquetaFilter(contacts) {
         }
     });
     sel.value = current;
+}
+
+function toggleContactSelect(id, checked) {
+    checked ? contactsSelected.add(id) : contactsSelected.delete(id);
+    // Actualizar estado visual de la fila
+    const cb  = document.querySelector(`.contact-row-check[data-id="${id}"]`);
+    const row = cb?.closest('tr');
+    if (row) row.classList.toggle('row-selected', checked);
+    // Sincronizar "seleccionar todos"
+    const all  = document.querySelectorAll('.contact-row-check');
+    const allChk = document.getElementById('contacts-check-all');
+    if (allChk) allChk.checked = all.length > 0 && [...all].every(c => c.checked);
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    const bar   = document.getElementById('bulk-action-bar');
+    const label = document.getElementById('bulk-count-label');
+    const n     = contactsSelected.size;
+    if (n > 0) {
+        bar.style.display    = 'flex';
+        label.textContent    = `${n} contacto${n !== 1 ? 's' : ''} seleccionado${n !== 1 ? 's' : ''}`;
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function clearContactSelection() {
+    contactsSelected.clear();
+    document.querySelectorAll('.contact-row-check').forEach(cb => cb.checked = false);
+    document.querySelectorAll('.row-selected').forEach(r => r.classList.remove('row-selected'));
+    const allChk = document.getElementById('contacts-check-all');
+    if (allChk) allChk.checked = false;
+    updateBulkBar();
+}
+
+async function applyBulkEtiqueta() {
+    const etiqueta = document.getElementById('bulk-etiqueta-input').value.trim();
+    const ids      = [...contactsSelected];
+    if (!ids.length) return;
+
+    const btn = document.getElementById('btn-bulk-apply');
+    btn.disabled  = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i>';
+
+    try {
+        const res  = await authFetch('/api/contacts', {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ ids, etiqueta })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al aplicar etiqueta');
+        document.getElementById('bulk-etiqueta-input').value = '';
+        clearContactSelection();
+        loadContacts();
+    } catch (err) {
+        alert('Error: ' + err.message);
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="ph ph-check"></i> Aplicar etiqueta';
+    }
 }
 
 async function deleteContact(id, telefono) {

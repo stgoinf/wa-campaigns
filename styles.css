@@ -1170,6 +1170,75 @@ header p { color: var(--text-secondary); }
 .import-result-ok    { background: rgba(37,211,102,0.1); color: #4ade80; border: 1px solid rgba(37,211,102,0.3); }
 .import-result-error { background: rgba(239,68,68,0.1);  color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
 
+/* Filtro de rango de fechas */
+.contacts-date-range {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.65rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.contacts-date-range label { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+.date-input  { max-width: 150px; padding: 0.45rem 0.75rem !important; }
+.date-sep    { color: var(--text-secondary); }
+.btn-sm {
+    padding: 0.4rem 0.85rem !important;
+    font-size: 0.8rem !important;
+}
+
+/* Columna de checkboxes */
+.col-check { width: 36px; text-align: center; padding: 0.5rem !important; }
+input[type="checkbox"].contact-row-check,
+input[type="checkbox"]#contacts-check-all {
+    width: 16px; height: 16px;
+    accent-color: var(--accent-green);
+    cursor: pointer;
+}
+
+/* Fila seleccionada */
+.row-selected td { background: rgba(37,211,102,0.06) !important; }
+
+/* Barra de acción en bloque */
+.bulk-action-bar {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: rgba(15,23,42,0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(37,211,102,0.4);
+    border-radius: 14px;
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 400;
+    min-width: 340px;
+}
+.bulk-count {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-green);
+    white-space: nowrap;
+}
+.bulk-tag-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+.bulk-tag-wrap > i { color: var(--accent-green); flex-shrink: 0; }
+.bulk-tag-input {
+    max-width: 160px;
+    padding: 0.4rem 0.7rem !important;
+    font-size: 0.82rem !important;
+}
+
 /* ─────────────────────────────────────────────
    Responsive
 ───────────────────────────────────────────── */

@@ -301,18 +301,40 @@
                 </div>
             </div>
 
-            <!-- Barra de búsqueda y filtro -->
+            <!-- Filtros -->
             <div class="contacts-search-bar glass-panel">
+                <!-- Búsqueda -->
                 <div class="search-input-wrap">
                     <i class="ph ph-magnifying-glass"></i>
                     <input type="text" id="contacts-search" class="glass-select search-input"
                         placeholder="Buscar por número o nombre...">
                 </div>
+                <!-- Etiqueta -->
                 <select id="contacts-etiqueta-filter" class="glass-select etiqueta-select">
                     <option value="">Todas las etiquetas</option>
                 </select>
+                <!-- Último envío: preset -->
+                <select id="contacts-sent-preset" class="glass-select etiqueta-select">
+                    <option value="">Todos los envíos</option>
+                    <option value="7d">Enviados: últimos 7 días</option>
+                    <option value="30d">Enviados: últimos 30 días</option>
+                    <option value="90d">Enviados: últimos 90 días</option>
+                    <option value="never">Nunca enviados</option>
+                    <option value="custom">Rango de fechas...</option>
+                </select>
                 <button id="btn-refresh-contacts" class="icon-btn" title="Actualizar">
                     <i class="ph ph-arrows-clockwise"></i>
+                </button>
+            </div>
+
+            <!-- Rango de fechas personalizado (oculto por defecto) -->
+            <div class="contacts-date-range glass-panel" id="contacts-date-range" style="display:none">
+                <label><i class="ph ph-calendar"></i> Último envío entre:</label>
+                <input type="date" id="contacts-sent-from" class="glass-select date-input">
+                <span class="date-sep">y</span>
+                <input type="date" id="contacts-sent-to" class="glass-select date-input">
+                <button id="btn-apply-date-range" class="btn-primary btn-sm">
+                    <i class="ph ph-funnel"></i> Aplicar
                 </button>
             </div>
 
@@ -322,6 +344,9 @@
                     <table id="contacts-table">
                         <thead>
                             <tr>
+                                <th class="col-check">
+                                    <input type="checkbox" id="contacts-check-all" title="Seleccionar todos">
+                                </th>
                                 <th>Teléfono</th>
                                 <th>Nombre</th>
                                 <th>Etiqueta</th>
@@ -332,7 +357,7 @@
                         </thead>
                         <tbody id="contacts-tbody">
                             <tr>
-                                <td colspan="6" class="empty-state">
+                                <td colspan="7" class="empty-state">
                                     <i class="ph ph-address-book"></i>
                                     <p>No hay contactos. Importa un CSV para comenzar.</p>
                                 </td>
@@ -351,6 +376,22 @@
                         Siguiente <i class="ph ph-caret-right"></i>
                     </button>
                 </div>
+            </div>
+
+            <!-- Barra de acción en bloque (aparece al seleccionar contactos) -->
+            <div class="bulk-action-bar" id="bulk-action-bar" style="display:none">
+                <span id="bulk-count-label" class="bulk-count">0 contactos seleccionados</span>
+                <div class="bulk-tag-wrap">
+                    <i class="ph ph-tag"></i>
+                    <input type="text" id="bulk-etiqueta-input" class="glass-select bulk-tag-input"
+                        placeholder="Escribir etiqueta...">
+                    <button id="btn-bulk-apply" class="btn-primary btn-sm">
+                        <i class="ph ph-check"></i> Aplicar etiqueta
+                    </button>
+                </div>
+                <button id="btn-bulk-deselect" class="btn-ghost btn-sm">
+                    <i class="ph ph-x"></i> Deseleccionar
+                </button>
             </div>
         </div>
 
