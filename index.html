@@ -309,10 +309,20 @@
                     <input type="text" id="contacts-search" class="glass-select search-input"
                         placeholder="Buscar por número o nombre...">
                 </div>
-                <!-- Etiqueta -->
-                <select id="contacts-etiqueta-filter" class="glass-select etiqueta-select">
-                    <option value="">Todas las etiquetas</option>
-                </select>
+                <!-- Etiqueta (multi-select dropdown) -->
+                <div id="tags-filter-wrap" class="tags-filter-wrap">
+                    <button type="button" id="tags-filter-btn" class="glass-select etiqueta-select tags-filter-btn">
+                        <i class="ph ph-tag"></i>
+                        <span id="tags-filter-label">Todas las etiquetas</span>
+                        <i class="ph ph-caret-down" style="margin-left:auto"></i>
+                    </button>
+                    <div id="tags-filter-dropdown" class="tags-filter-dropdown" style="display:none">
+                        <label class="tags-option">
+                            <input type="checkbox" id="tags-all-check" value="" checked>
+                            <span>Todas las etiquetas</span>
+                        </label>
+                    </div>
+                </div>
                 <!-- Último envío: preset -->
                 <select id="contacts-sent-preset" class="glass-select etiqueta-select">
                     <option value="">Todos los envíos</option>
@@ -499,17 +509,26 @@
                 <label>
                     Plantilla de WhatsApp
                     <button type="button" id="btn-load-templates" class="btn-inline">
-                        <i class="ph ph-arrows-clockwise"></i> Actualizar plantillas
+                        <i class="ph ph-arrows-clockwise"></i> Actualizar
                     </button>
                 </label>
-                <!-- Cuadrícula de tarjetas (se rellena al abrir el modal) -->
-                <div id="template-cards" class="template-picker-grid">
-                    <p class="tc-empty"><i class="ph ph-circle-notch ph-spin"></i> Cargando plantillas...</p>
+
+                <!-- Sección: usadas recientemente -->
+                <div id="recent-templates-section" style="display:none">
+                    <p class="tl-section-label"><i class="ph ph-clock-counter-clockwise"></i> Usadas recientemente</p>
+                    <ul id="recent-template-list" class="template-list recent-list"></ul>
                 </div>
-                <!-- Inputs ocultos que se rellenan al seleccionar una tarjeta -->
+
+                <!-- Sección: todas las plantillas -->
+                <p class="tl-section-label"><i class="ph ph-list"></i> Todas las plantillas</p>
+                <ul id="template-list" class="template-list">
+                    <li class="tl-empty"><i class="ph ph-circle-notch ph-spin"></i> Cargando plantillas...</li>
+                </ul>
+
+                <!-- Inputs ocultos que se rellenan al seleccionar una plantilla -->
                 <input type="hidden" id="f-template" required>
                 <input type="hidden" id="f-language" value="es">
-                <small id="f-template-hint">Haz clic en una plantilla para seleccionarla</small>
+                <small id="f-template-hint">Selecciona una plantilla de la lista</small>
             </div>
 
             <!-- Campos dinámicos según la plantilla seleccionada -->

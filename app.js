@@ -162,7 +162,7 @@ function setupNavigation() {
             document.getElementById(`tab-${tab}`).classList.add('active');
             document.getElementById('filters-panel').style.display = tab === 'analytics' ? 'block' : 'none';
             if (tab === 'campaigns') loadCampaigns();
-            if (tab === 'contacts')  loadContacts();
+            if (tab === 'contacts')  { loadContacts(); loadTagsFilter(); }
             if (tab === 'config')    loadConfig();
         });
     });
@@ -747,10 +747,11 @@ async function openCampaignModal() {
     await updateContactPreview();
     // Cargar plantillas automáticamente (o usar caché si ya están)
     if (cachedTemplates.length) {
-        renderTemplateCards(cachedTemplates);
+        renderTemplateList(cachedTemplates);
     } else {
         loadTemplatesIntoModal();
     }
+    loadRecentTemplates();
 }
 
 async function loadTemplatesIntoModal() {
@@ -765,7 +766,7 @@ async function loadTemplatesIntoModal() {
                 `<p class="tc-empty tc-error"><i class="ph ph-warning"></i> ${escHtml(data.error || 'Error al cargar plantillas.')}</p>`;
         } else {
             cachedTemplates = data.templates;
-            renderTemplateCards(data.templates);
+            renderTemplateList(data.templates);
         }
     } catch {
         document.getElementById('template-cards').innerHTML =
@@ -776,44 +777,80 @@ async function loadTemplatesIntoModal() {
     }
 }
 
-// ─── Tarjetas de plantillas ─────────────────────
+// ─── Lista de plantillas ─────────────────────
 
-function renderTemplateCards(templates) {
-    const grid = document.getElementById('template-cards');
+// Caché de campañas recientes para pre-llenado sin segundo fetch
+let cachedRecentCampaigns = [];
+
+function renderTemplateList(templates) {
+    const ul = document.getElementById('template-list');
     if (!templates.length) {
-        grid.innerHTML = '<p class="tc-empty">No hay plantillas aprobadas en esta cuenta.</p>';
+        ul.innerHTML = '<li class="tl-empty">No hay plantillas aprobadas en esta cuenta.</li>';
         return;
     }
-    grid.innerHTML = templates.map(t => {
+    ul.innerHTML = templates.map(t => {
         const bodyComp   = t.components?.find(c => c.type === 'BODY');
         const headerComp = t.components?.find(c => c.type === 'HEADER');
-        const preview    = bodyComp?.text?.slice(0, 90) || '(sin texto de cuerpo)';
-        const more       = (bodyComp?.text?.length ?? 0) > 90 ? '…' : '';
-        const mediaIcon  = headerComp?.format === 'IMAGE'    ? '<i class="ph ph-image tc-media-icon"></i>'
-                         : headerComp?.format === 'VIDEO'    ? '<i class="ph ph-video tc-media-icon"></i>'
-                         : headerComp?.format === 'DOCUMENT' ? '<i class="ph ph-file tc-media-icon"></i>'
+        const preview    = bodyComp?.text?.slice(0, 80) || '(sin texto de cuerpo)';
+        const more       = (bodyComp?.text?.length ?? 0) > 80 ? '…' : '';
+        const fmt        = headerComp?.format;
+        const mediaIcon  = fmt === 'IMAGE'    ? '<i class="ph ph-image tl-media"></i>'
+                         : fmt === 'VIDEO'    ? '<i class="ph ph-video tl-media"></i>'
+                         : fmt === 'DOCUMENT' ? '<i class="ph ph-file tl-media"></i>'
                          : '';
-        // Escapar comillas simples para onclick
-        const safeName = t.name.replace(/'/g, "\\'");
+        const safeName   = t.name.replace(/'/g, "\\'");
         return `
-        <div class="tc-card" data-name="${escHtml(t.name)}" onclick="selectTemplate('${safeName}')">
-            <div class="tc-top">
-                <strong class="tc-name">${mediaIcon}${escHtml(t.name)}</strong>
-                <span class="tag tag-lang">${escHtml(t.language)}</span>
-            </div>
-            <p class="tc-preview">${escHtml(preview)}${more}</p>
-        </div>`;
+        <li class="tl-item" data-name="${escHtml(t.name)}" onclick="selectTemplate('${safeName}')">
+            <div class="tl-name">${mediaIcon}<strong>${escHtml(t.name)}</strong>
+                <span class="tag tag-lang">${escHtml(t.language)}</span></div>
+            <div class="tl-preview">${escHtml(preview)}${more}</div>
+        </li>`;
     }).join('');
 }
 
-function selectTemplate(name) {
+async function loadRecentTemplates() {
+    const section = document.getElementById('recent-templates-section');
+    try {
+        const res  = await authFetch('/api/campaigns');
+        const data = await res.json();
+        cachedRecentCampaigns = data.campaigns || [];
+        // Deduplicar por template_name, tomar el más reciente de cada una
+        const seen = new Map();
+        cachedRecentCampaigns.forEach(c => {
+            if (!seen.has(c.template_name)) seen.set(c.template_name, c);
+        });
+        const recents = [...seen.values()].slice(0, 5);
+        if (!recents.length) { section.style.display = 'none'; return; }
+        section.style.display = 'block';
+        const ul = document.getElementById('recent-template-list');
+        ul.innerHTML = recents.map(c => {
+            const safeName = c.template_name.replace(/'/g, "\\'");
+            return `
+            <li class="tl-item tl-recent" data-name="${escHtml(c.template_name)}"
+                onclick="selectTemplateFromCampaign('${safeName}', ${c.id})">
+                <div class="tl-name"><i class="ph ph-arrow-counter-clockwise tl-reuse"></i>
+                    <strong>${escHtml(c.template_name)}</strong>
+                    <span class="tag tag-lang">${escHtml(c.template_language)}</span>
+                </div>
+                <div class="tl-preview tl-reuse-hint">Reutilizar con parámetros anteriores</div>
+            </li>`;
+        }).join('');
+    } catch { section.style.display = 'none'; }
+}
+
+function selectTemplateFromCampaign(templateName, campaignId) {
+    const camp = cachedRecentCampaigns.find(c => c.id === campaignId);
+    selectTemplate(templateName, camp?.template_params || null);
+}
+
+function selectTemplate(name, prefill = null) {
     const template = cachedTemplates.find(t => t.name === name);
     if (!template) return;
 
-    // Resaltar la tarjeta seleccionada
-    document.querySelectorAll('.tc-card').forEach(c => c.classList.remove('tc-selected'));
-    const card = document.querySelector(`.tc-card[data-name="${CSS.escape(name)}"]`);
-    if (card) card.classList.add('tc-selected');
+    // Resaltar el ítem seleccionado
+    document.querySelectorAll('.tl-item').forEach(i => i.classList.remove('tl-selected'));
+    const item = document.querySelector(`.tl-item[data-name="${CSS.escape(name)}"]`);
+    if (item) { item.classList.add('tl-selected'); item.scrollIntoView({ block: 'nearest' }); }
 
     // Actualizar inputs ocultos
     document.getElementById('f-template').value = template.name;
@@ -823,11 +860,11 @@ function selectTemplate(name) {
     document.getElementById('f-template-hint').textContent =
         `Plantilla seleccionada: ${template.name}  ·  Idioma: ${template.language}`;
 
-    // Generar campos dinámicos
-    generateDynamicFields(template);
+    // Generar campos dinámicos (con valores pre-llenados si se pasa prefill)
+    generateDynamicFields(template, prefill);
 }
 
-function generateDynamicFields(template) {
+function generateDynamicFields(template, prefill = null) {
     const container  = document.getElementById('f-dynamic-fields');
     container.innerHTML = '';
 
@@ -835,24 +872,32 @@ function generateDynamicFields(template) {
     const headerComp = components.find(c => c.type === 'HEADER');
     const bodyComp   = components.find(c => c.type === 'BODY');
 
+    // Extraer valores pre-llenados del array template_params
+    const prefillHeader = prefill?.find(p => p.type === 'header');
+    const prefillBody   = prefill?.find(p => p.type === 'body');
+
     let hasFields = false;
 
     // ── Campo de URL para header multimedia ──
     if (headerComp && ['IMAGE','VIDEO','DOCUMENT'].includes(headerComp.format)) {
         hasFields = true;
-        const fmt     = headerComp.format;
-        const iconCls = fmt === 'IMAGE' ? 'ph-image' : fmt === 'VIDEO' ? 'ph-video' : 'ph-file';
-        const label   = fmt === 'IMAGE' ? 'imagen' : fmt === 'VIDEO' ? 'video' : 'documento';
-        const example = fmt === 'IMAGE' ? 'jpg' : fmt === 'VIDEO' ? 'mp4' : 'pdf';
+        const fmt        = headerComp.format;
+        const mediaKey   = fmt.toLowerCase(); // 'image', 'video', 'document'
+        const iconCls    = fmt === 'IMAGE' ? 'ph-image' : fmt === 'VIDEO' ? 'ph-video' : 'ph-file';
+        const label      = fmt === 'IMAGE' ? 'imagen' : fmt === 'VIDEO' ? 'video' : 'documento';
+        const example    = fmt === 'IMAGE' ? 'jpg' : fmt === 'VIDEO' ? 'mp4' : 'pdf';
+        const prefillUrl = prefillHeader?.parameters?.[0]?.[mediaKey]?.link || '';
+
         container.insertAdjacentHTML('beforeend', `
             <div class="form-group">
                 <label><i class="ph ${iconCls}"></i> URL del ${label} (encabezado)</label>
                 <input type="text" id="df-header-url" class="glass-select"
                     placeholder="https://ejemplo.com/archivo.${example}"
-                    data-param-type="header" data-media-type="${fmt.toLowerCase()}">
+                    data-param-type="header" data-media-type="${mediaKey}"
+                    value="${escHtml(prefillUrl)}">
                 ${fmt === 'IMAGE' ? `
-                <div id="df-img-preview" class="img-preview" style="display:none">
-                    <img id="df-img-tag" src="" alt="Vista previa">
+                <div id="df-img-preview" class="img-preview" style="${prefillUrl ? 'display:block' : 'display:none'}">
+                    <img id="df-img-tag" src="${escHtml(prefillUrl)}" alt="Vista previa">
                 </div>` : ''}
             </div>
         `);
@@ -874,18 +919,20 @@ function generateDynamicFields(template) {
             [...bodyComp.text.matchAll(/\{\{(\d+)\}\}/g)].map(m => parseInt(m[1]))
         )].sort((a, b) => a - b);
 
-        nums.forEach(num => {
+        nums.forEach((num, idx) => {
             hasFields = true;
             // Mostrar la frase que rodea la variable como contexto
             const ctx = bodyComp.text.replace(/\{\{(\d+)\}\}/g, (_, n) =>
                 parseInt(n) === num ? `【→ {{${n}}}】` : `{{${n}}}`
             );
+            const prefillVal = prefillBody?.parameters?.[idx]?.text || '';
             container.insertAdjacentHTML('beforeend', `
                 <div class="form-group">
                     <label>Variable <code>{{${num}}}</code> del cuerpo</label>
                     <input type="text" id="df-body-${num}" class="glass-select"
                         placeholder="Valor para {{${num}}}"
-                        data-param-type="body" data-var-num="${num}">
+                        data-param-type="body" data-var-num="${num}"
+                        value="${escHtml(prefillVal)}">
                     <small class="field-updated ctx-hint">${escHtml(ctx.slice(0,100))}${ctx.length > 100 ? '…' : ''}</small>
                 </div>
             `);
@@ -893,9 +940,10 @@ function generateDynamicFields(template) {
     }
 
     if (hasFields) {
+        const hint = prefill ? ' <span class="prefill-hint"><i class="ph ph-magic-wand"></i> Pre-llenado de campaña anterior</span>' : '';
         container.insertAdjacentHTML('afterbegin', `
             <div class="dynamic-fields-title">
-                <i class="ph ph-sliders"></i> Parámetros de la plantilla
+                <i class="ph ph-sliders"></i> Parámetros de la plantilla${hint}
             </div>
         `);
         container.style.display = 'block';
@@ -934,11 +982,11 @@ function closeCampaignModal() {
     document.getElementById('form-campaign').reset();
     document.getElementById('f-etiqueta-group').style.display = 'none';
     // Limpiar selección de plantilla y campos dinámicos
-    document.querySelectorAll('.tc-card').forEach(c => c.classList.remove('tc-selected'));
+    document.querySelectorAll('.tl-item').forEach(i => i.classList.remove('tl-selected'));
     const dynFields = document.getElementById('f-dynamic-fields');
     dynFields.innerHTML = '';
     dynFields.style.display = 'none';
-    document.getElementById('f-template-hint').textContent = 'Haz clic en una plantilla para seleccionarla';
+    document.getElementById('f-template-hint').textContent = 'Selecciona una plantilla de la lista';
 }
 async function updateContactPreview() {
     const source   = document.getElementById('f-source').value;
@@ -1019,11 +1067,17 @@ function setupContacts() {
         }, 400);
     });
 
-    // Filtro etiqueta
-    document.getElementById('contacts-etiqueta-filter').addEventListener('change', e => {
-        contactsCurrentEtiqueta = e.target.value;
-        contactsCurrentPage     = 1;
-        loadContacts();
+    // Filtro etiqueta — toggle dropdown
+    document.getElementById('tags-filter-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        const dd = document.getElementById('tags-filter-dropdown');
+        dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+    });
+    // Cerrar dropdown al hacer click fuera
+    document.addEventListener('click', e => {
+        const wrap = document.getElementById('tags-filter-wrap');
+        if (wrap && !wrap.contains(e.target))
+            document.getElementById('tags-filter-dropdown').style.display = 'none';
     });
 
     // Filtro último envío (preset)
@@ -1084,7 +1138,9 @@ async function loadContacts(page = contactsCurrentPage) {
     try {
         const params = new URLSearchParams({ page, limit: 50 });
         if (contactsCurrentSearch)   params.set('search',      contactsCurrentSearch);
-        if (contactsCurrentEtiqueta) params.set('etiqueta',    contactsCurrentEtiqueta);
+        const selectedTags = getSelectedTags();
+        if (selectedTags.length === 1) params.set('etiqueta', selectedTags[0]);
+        // For multiple tags: filter client-side after load (API supports one tag at a time)
         if (contactsCurrentPreset)   params.set('sent_preset', contactsCurrentPreset);
         if (contactsCurrentPreset === 'custom') {
             if (contactsCurrentFrom) params.set('sent_from', contactsCurrentFrom);
@@ -1100,10 +1156,15 @@ async function loadContacts(page = contactsCurrentPage) {
         document.getElementById('contacts-check-all').checked = false;
         updateBulkBar();
 
-        renderContactsTable(data.contacts, data.total);
+        // Client-side filter for multiple tags (API handles single-tag via ?etiqueta=)
+        const multiTags = getSelectedTags();
+        const filtered  = multiTags.length > 1
+            ? data.contacts.filter(c => multiTags.some(t => (c.tags || []).includes(t)))
+            : data.contacts;
+
+        renderContactsTable(filtered, data.total);
         renderContactsPagination(data.page, data.pages, data.total);
         loadContactsStats();
-        populateEtiquetaFilter(data.contacts);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="ph ph-warning"></i><p>Error al cargar contactos: ${escHtml(err.message)}</p></td></tr>`;
     }
@@ -1115,14 +1176,17 @@ function renderContactsTable(contacts, total) {
     if (!contacts.length) {
         tbody.innerHTML = `<tr><td colspan="7" class="empty-state">
             <i class="ph ph-address-book"></i>
-            <p>${contactsCurrentSearch || contactsCurrentEtiqueta || contactsCurrentPreset ? 'No se encontraron contactos con ese filtro.' : 'No hay contactos. Importa un CSV para comenzar.'}</p>
+            <p>${contactsCurrentSearch || getSelectedTags().length || contactsCurrentPreset ? 'No se encontraron contactos con ese filtro.' : 'No hay contactos. Importa un CSV para comenzar.'}</p>
         </td></tr>`;
         return;
     }
 
     tbody.innerHTML = contacts.map(c => {
-        const nombre   = c.nombre   ? escHtml(c.nombre)   : '<span class="dim">—</span>';
-        const etiqueta = c.etiqueta ? `<span class="tag tag-lang">${escHtml(c.etiqueta)}</span>` : '<span class="dim">—</span>';
+        const nombre     = c.nombre ? escHtml(c.nombre) : '<span class="dim">—</span>';
+        const tagsArr    = c.tags && c.tags.length ? c.tags : (c.etiqueta ? [c.etiqueta] : []);
+        const etiquetaHtml = tagsArr.length
+            ? tagsArr.map(t => `<span class="tag tag-lang">${escHtml(t)}</span>`).join(' ')
+            : '<span class="dim">—</span>';
         const created  = c.created_at ? new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—';
         const checked  = contactsSelected.has(c.id) ? 'checked' : '';
 
@@ -1140,7 +1204,7 @@ function renderContactsTable(contacts, total) {
             </td>
             <td><code class="phone-code">${escHtml(c.telefono)}</code></td>
             <td>${nombre}</td>
-            <td>${etiqueta}</td>
+            <td>${etiquetaHtml}</td>
             <td class="last-sent-cell">${lastSent}</td>
             <td class="dim">${created}</td>
             <td class="actions-cell">
@@ -1183,17 +1247,62 @@ async function loadContactsStats() {
     } catch { /* silencioso */ }
 }
 
-function populateEtiquetaFilter(contacts) {
-    const sel      = document.getElementById('contacts-etiqueta-filter');
-    const current  = sel.value;
-    const existing = new Set([...sel.options].map(o => o.value).filter(v => v));
-    contacts.forEach(c => {
-        if (c.etiqueta && !existing.has(c.etiqueta)) {
-            existing.add(c.etiqueta);
-            sel.insertAdjacentHTML('beforeend', `<option value="${escHtml(c.etiqueta)}">${escHtml(c.etiqueta)}</option>`);
-        }
-    });
-    sel.value = current;
+async function loadTagsFilter() {
+    try {
+        const res  = await authFetch('/api/contacts?etiquetas=true');
+        const data = await res.json();
+        const dropdown = document.getElementById('tags-filter-dropdown');
+        const etiquetas = data.etiquetas || [];
+
+        // Preserve currently selected tags
+        const currentlySelected = getSelectedTags();
+
+        dropdown.innerHTML = `
+            <label class="tags-option">
+                <input type="checkbox" id="tags-all-check" value="">
+                <span>Todas las etiquetas</span>
+            </label>
+            ${etiquetas.map(e => `
+            <label class="tags-option">
+                <input type="checkbox" value="${escHtml(e.tag)}"${currentlySelected.includes(e.tag) ? ' checked' : ''}>
+                <span>${escHtml(e.tag)}</span> <span class="tags-count">(${e.cnt})</span>
+            </label>`).join('')}
+        `;
+
+        // "Todas" checkbox: check it if nothing specific is selected
+        const allChk = document.getElementById('tags-all-check');
+        if (allChk) allChk.checked = currentlySelected.length === 0;
+
+        // Wire event listeners
+        dropdown.querySelectorAll('input[type=checkbox]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                // If "Todas" was clicked, uncheck specific tags; if specific was clicked, uncheck "Todas"
+                if (cb.value === '') {
+                    if (cb.checked) dropdown.querySelectorAll('input[type=checkbox]:not(#tags-all-check)').forEach(c => c.checked = false);
+                } else {
+                    if (allChk) allChk.checked = false;
+                }
+                updateTagsFilterLabel();
+                contactsCurrentPage = 1;
+                loadContacts();
+            });
+        });
+
+        updateTagsFilterLabel();
+    } catch { /* silencioso */ }
+}
+
+function getSelectedTags() {
+    return [...document.querySelectorAll('#tags-filter-dropdown input[type=checkbox]:checked')]
+        .map(cb => cb.value).filter(v => v);
+}
+
+function updateTagsFilterLabel() {
+    const selected = getSelectedTags();
+    document.getElementById('tags-filter-label').textContent =
+        selected.length === 0 ? 'Todas las etiquetas' :
+        selected.length === 1 ? selected[0] :
+        `${selected.length} etiquetas`;
 }
 
 function toggleContactSelect(id, checked) {
