@@ -20,11 +20,15 @@ module.exports = async function handler(req, res) {
 
     let inserted = 0;
     for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
-        const batch = contacts.slice(i, i + BATCH_SIZE).map(c => ({
-            telefono: String(c.telefono).replace(/\D/g, ''),
-            nombre:   c.nombre   || null,
-            etiqueta: c.etiqueta || null
-        })).filter(c => c.telefono.length >= 8);
+        const batch = contacts.slice(i, i + BATCH_SIZE).map(c => {
+            const etiqueta = c.etiqueta || null;
+            return {
+                telefono: String(c.telefono).replace(/\D/g, ''),
+                nombre:   c.nombre   || null,
+                etiqueta,
+                tags:     etiqueta ? [etiqueta] : []
+            };
+        }).filter(c => c.telefono.length >= 8);
 
         // ignoredDuplicateHandling: upsert preserva last_sent_at y last_template existentes
         const { error } = await sb

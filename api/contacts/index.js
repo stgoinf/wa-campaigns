@@ -19,6 +19,13 @@ module.exports = async function handler(req, res) {
             return res.json({ count: count || 0 });
         }
 
+        // all unique tags with contact counts
+        if (req.query.etiquetas === 'true') {
+            const { data, error } = await sb.rpc('get_all_tags_with_counts');
+            if (error) return res.status(500).json({ error: error.message });
+            return res.json({ etiquetas: data || [] });
+        }
+
         const page      = Math.max(1, parseInt(req.query.page  || '1'));
         const limit     = Math.min(100, Math.max(1, parseInt(req.query.limit || '50')));
         const search    = (req.query.search    || '').trim();
@@ -32,13 +39,13 @@ module.exports = async function handler(req, res) {
         try {
             let query = sb
                 .from('contacts')
-                .select('id, telefono, nombre, etiqueta, created_at, last_sent_at, last_template', { count: 'exact' })
+                .select('id, telefono, nombre, etiqueta, tags, created_at, last_sent_at, last_template', { count: 'exact' })
                 .order('last_sent_at', { ascending: false, nullsFirst: false })
                 .order('created_at',   { ascending: false })
                 .range(from, to);
 
             if (search)   query = query.or(`telefono.ilike.%${search}%,nombre.ilike.%${search}%`);
-            if (etiqueta) query = query.eq('etiqueta', etiqueta);
+            if (etiqueta) query = query.contains('tags', [etiqueta]);
 
             // Filtro por fecha de último envío
             if (preset === 'never') {
@@ -64,20 +71,45 @@ module.exports = async function handler(req, res) {
     }
 
     // ── PUT: asignar etiqueta en bloque ──────────────────────────────────────
+    // Body: { ids: [1,2,3], etiqueta: "promo", mode: "replace"|"add"|"remove" }
+    // mode defaults to "replace" (backward-compatible)
     if (req.method === 'PUT') {
-        const { ids, etiqueta } = req.body || {};
+        const { ids, etiqueta, mode = 'replace' } = req.body || {};
         if (!Array.isArray(ids) || !ids.length) {
             return res.status(400).json({ error: 'Se requiere un array de ids.' });
         }
         if (typeof etiqueta !== 'string') {
             return res.status(400).json({ error: 'Se requiere el campo etiqueta.' });
         }
+        const tag = etiqueta.trim();
         try {
-            const { error } = await sb
-                .from('contacts')
-                .update({ etiqueta: etiqueta.trim() || null })
-                .in('id', ids);
-            if (error) return res.status(500).json({ error: error.message });
+            if (mode === 'replace' || !tag) {
+                // Replace entire tags array (and keep etiqueta for backward compat)
+                const newTags = tag ? [tag] : [];
+                const { error } = await sb
+                    .from('contacts')
+                    .update({ etiqueta: tag || null, tags: newTags })
+                    .in('id', ids);
+                if (error) return res.status(500).json({ error: error.message });
+            } else if (mode === 'add') {
+                // Add tag to each contact's array (avoid duplicates via Postgres array_append logic)
+                for (const id of ids) {
+                    const { data: row } = await sb.from('contacts').select('tags, etiqueta').eq('id', id).single();
+                    const current = row?.tags || [];
+                    if (!current.includes(tag)) {
+                        const newTags = [...current, tag];
+                        await sb.from('contacts').update({ tags: newTags, etiqueta: newTags[0] || null }).eq('id', id);
+                    }
+                }
+            } else if (mode === 'remove') {
+                // Remove tag from each contact's array
+                for (const id of ids) {
+                    const { data: row } = await sb.from('contacts').select('tags, etiqueta').eq('id', id).single();
+                    const current = row?.tags || [];
+                    const newTags = current.filter(t => t !== tag);
+                    await sb.from('contacts').update({ tags: newTags, etiqueta: newTags[0] || null }).eq('id', id);
+                }
+            }
             return res.json({ ok: true, updated: ids.length });
         } catch (err) {
             return res.status(500).json({ error: err.message });
