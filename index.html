@@ -431,9 +431,15 @@
                 <div class="bulk-tag-wrap">
                     <i class="ph ph-tag"></i>
                     <input type="text" id="bulk-etiqueta-input" class="glass-select bulk-tag-input"
-                        placeholder="Escribir etiqueta...">
+                        placeholder="Escribir etiqueta..." list="bulk-etiqueta-list">
+                    <datalist id="bulk-etiqueta-list"></datalist>
+                    <div class="bulk-mode-toggle">
+                        <button type="button" id="bulk-mode-add"     class="bulk-mode-btn active" title="Agregar sin borrar las existentes">+ Agregar</button>
+                        <button type="button" id="bulk-mode-replace" class="bulk-mode-btn"         title="Reemplazar todas las etiquetas">↺ Reemplazar</button>
+                        <button type="button" id="bulk-mode-remove"  class="bulk-mode-btn bulk-mode-remove" title="Quitar esta etiqueta">✕ Quitar</button>
+                    </div>
                     <button id="btn-bulk-apply" class="btn-primary btn-sm">
-                        <i class="ph ph-check"></i> Aplicar etiqueta
+                        <i class="ph ph-check"></i> Aplicar
                     </button>
                 </div>
                 <button id="btn-bulk-deselect" class="btn-ghost btn-sm">
@@ -581,7 +587,9 @@
 
             <div class="form-group" id="f-etiqueta-group" style="display:none">
                 <label>Etiqueta</label>
-                <input type="text" id="f-etiqueta" class="glass-select" placeholder="Nombre de la etiqueta">
+                <select id="f-etiqueta" class="glass-select">
+                    <option value="">Cargando etiquetas...</option>
+                </select>
             </div>
 
             <div class="form-group" id="contact-preview">
