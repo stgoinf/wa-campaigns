@@ -1358,8 +1358,10 @@ input[type="checkbox"]#contacts-check-all {
 .bulk-tag-sugg-item:hover { background: rgba(255,255,255,0.07); }
 
 /* ─── Fix z-index tags filter dropdown ──────────────────────────────────── */
+/* backdrop-filter en glass-panel crea stacking contexts independientes,
+   por eso el dropdown se usa con position:fixed y posición calculada via JS */
 .contacts-search-bar { overflow: visible !important; }
-.tags-filter-wrap    { position: relative; z-index: 600; }
+.tags-filter-wrap    { position: relative; }
 
 /* ─────────────────────────────────────────────
    Responsive
@@ -1408,10 +1410,8 @@ input[type="checkbox"]#contacts-check-all {
 }
 
 .tags-filter-dropdown {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    z-index: 1200;
+    position: fixed;
+    z-index: 9999;
     background: var(--glass-bg, rgba(15,23,42,0.95));
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 10px;
