@@ -317,9 +317,17 @@
                     <h1>Clientes</h1>
                     <p>Gestiona tus contactos de WhatsApp</p>
                 </div>
-                <button id="btn-import-contacts" class="btn-primary">
-                    <i class="ph ph-upload-simple"></i> Importar CSV
-                </button>
+                <div class="header-actions">
+                    <button id="btn-add-contact" class="btn-ghost">
+                        <i class="ph ph-user-plus"></i> Agregar cliente
+                    </button>
+                    <button id="btn-download-template" class="btn-ghost">
+                        <i class="ph ph-download-simple"></i> Plantilla CSV
+                    </button>
+                    <button id="btn-import-contacts" class="btn-primary">
+                        <i class="ph ph-upload-simple"></i> Importar clientes CSV
+                    </button>
+                </div>
             </header>
 
             <!-- Stats rápidas -->
@@ -430,9 +438,11 @@
                 <span id="bulk-count-label" class="bulk-count">0 contactos seleccionados</span>
                 <div class="bulk-tag-wrap">
                     <i class="ph ph-tag"></i>
-                    <input type="text" id="bulk-etiqueta-input" class="glass-select bulk-tag-input"
-                        placeholder="Escribir etiqueta..." list="bulk-etiqueta-list">
-                    <datalist id="bulk-etiqueta-list"></datalist>
+                    <div class="bulk-tag-combo" style="position:relative">
+                        <input type="text" id="bulk-etiqueta-input" class="glass-select bulk-tag-input"
+                            placeholder="Escribir o seleccionar...">
+                        <div id="bulk-tag-suggestions" class="bulk-tag-suggestions" style="display:none"></div>
+                    </div>
                     <div class="bulk-mode-toggle">
                         <button type="button" id="bulk-mode-add"     class="bulk-mode-btn active" title="Agregar sin borrar las existentes">+ Agregar</button>
                         <button type="button" id="bulk-mode-replace" class="bulk-mode-btn"         title="Reemplazar todas las etiquetas">↺ Reemplazar</button>
@@ -660,6 +670,40 @@
 <div id="loader" class="loader-overlay">
     <div class="spinner"></div>
     <p id="loader-text">Procesando datos...</p>
+</div>
+
+<!-- ─── Modal: Agregar cliente manual ─── -->
+<div id="add-contact-modal" class="modal-overlay" style="display:none">
+    <div class="modal-card glass-panel" style="max-width:420px;width:90%">
+        <div class="modal-header">
+            <h2><i class="ph ph-user-plus"></i> Agregar cliente</h2>
+            <button class="icon-btn" id="add-contact-close"><i class="ph ph-x"></i></button>
+        </div>
+        <form id="form-add-contact" style="padding:1.5rem">
+            <div class="form-group">
+                <label>Teléfono <span style="color:#f87171">*</span></label>
+                <input type="text" id="ac-telefono" class="glass-select"
+                    placeholder="18091234567 (solo números, con código de país)" required>
+            </div>
+            <div class="form-group">
+                <label>Nombre</label>
+                <input type="text" id="ac-nombre" class="glass-select" placeholder="Juan Pérez">
+            </div>
+            <div class="form-group">
+                <label>Etiqueta</label>
+                <input type="text" id="ac-etiqueta" class="glass-select"
+                    placeholder="Opcional" list="ac-etiqueta-list">
+                <datalist id="ac-etiqueta-list"></datalist>
+            </div>
+            <p id="ac-error" style="color:#f87171;font-size:0.85rem;display:none"></p>
+            <div class="modal-footer">
+                <button type="button" class="btn-ghost" id="ac-cancel">Cancelar</button>
+                <button type="submit" class="btn-primary" id="ac-submit">
+                    <i class="ph ph-plus"></i> Agregar
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script src="app.js"></script>

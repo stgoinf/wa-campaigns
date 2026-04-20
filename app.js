@@ -176,6 +176,28 @@ const colors = [
     'rgba(6,182,212,0.8)'
 ];
 
+// ─── Colores de etiquetas (determinista por nombre) ───────────────────────
+const TAG_PALETTE = [
+    { bg:'rgba(59,130,246,0.18)',  border:'rgba(59,130,246,0.45)',  text:'#93c5fd' },
+    { bg:'rgba(16,185,129,0.18)',  border:'rgba(16,185,129,0.45)',  text:'#6ee7b7' },
+    { bg:'rgba(245,158,11,0.18)',  border:'rgba(245,158,11,0.45)',  text:'#fcd34d' },
+    { bg:'rgba(239,68,68,0.18)',   border:'rgba(239,68,68,0.45)',   text:'#fca5a5' },
+    { bg:'rgba(139,92,246,0.18)',  border:'rgba(139,92,246,0.45)',  text:'#c4b5fd' },
+    { bg:'rgba(236,72,153,0.18)',  border:'rgba(236,72,153,0.45)',  text:'#f9a8d4' },
+    { bg:'rgba(20,184,166,0.18)',  border:'rgba(20,184,166,0.45)',  text:'#5eead4' },
+    { bg:'rgba(249,115,22,0.18)',  border:'rgba(249,115,22,0.45)',  text:'#fdba74' },
+];
+function tagColor(tag) {
+    let h = 0;
+    for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) & 0xfffffff;
+    return TAG_PALETTE[h % TAG_PALETTE.length];
+}
+function tagBadge(tag, contactId) {
+    const c = tagColor(tag);
+    const style = `background:${c.bg};border:1px solid ${c.border};color:${c.text}`;
+    return `<span class="tag tag-colored" style="${style}">${escHtml(tag)}<button class="tag-remove-btn" onclick="removeContactTag(${contactId},'${escHtml(tag).replace(/'/g,"\\'")}');event.stopPropagation()" title="Quitar etiqueta">×</button></span>`;
+}
+
 // ─────────────────────────────────────────────
 // Elementos UI
 // ─────────────────────────────────────────────
@@ -593,20 +615,6 @@ function setupCampaigns() {
         updateContactPreview();
     });
     document.getElementById('f-etiqueta').addEventListener('change', updateContactPreview);
-
-    // Modo de etiqueta en bloque (Agregar / Reemplazar / Quitar)
-    let bulkTagMode = 'add';
-    document.querySelectorAll('.bulk-mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.bulk-mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            bulkTagMode = btn.id === 'bulk-mode-add' ? 'add'
-                        : btn.id === 'bulk-mode-replace' ? 'replace'
-                        : 'remove';
-        });
-    });
-    // Guardar el modo en window para que applyBulkEtiqueta() lo lea
-    window._bulkTagMode = () => bulkTagMode;
 }
 
 async function loadEtiquetasIntoSelect() {
@@ -1236,6 +1244,49 @@ function setupContacts() {
     document.getElementById('btn-bulk-deselect').addEventListener('click', clearContactSelection);
     document.getElementById('btn-bulk-apply').addEventListener('click', applyBulkEtiqueta);
 
+    // Botones nuevos
+    document.getElementById('btn-add-contact').addEventListener('click', openAddContactModal);
+    document.getElementById('btn-download-template').addEventListener('click', downloadContactsTemplate);
+
+    // Modal agregar cliente
+    document.getElementById('add-contact-close').addEventListener('click', closeAddContactModal);
+    document.getElementById('ac-cancel').addEventListener('click', closeAddContactModal);
+    document.getElementById('add-contact-modal').addEventListener('click', e => {
+        if (e.target === document.getElementById('add-contact-modal')) closeAddContactModal();
+    });
+    document.getElementById('form-add-contact').addEventListener('submit', submitAddContact);
+
+    // Modo de etiqueta en bloque (Agregar / Reemplazar / Quitar)
+    let bulkTagMode = 'add';
+    document.querySelectorAll('.bulk-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.bulk-mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            bulkTagMode = btn.id === 'bulk-mode-add' ? 'add'
+                        : btn.id === 'bulk-mode-replace' ? 'replace'
+                        : 'remove';
+        });
+    });
+    window._bulkTagMode = () => bulkTagMode;
+
+    // Bulk tag combo: mostrar/ocultar sugerencias
+    const bulkInput = document.getElementById('bulk-etiqueta-input');
+    const bulkSugg  = document.getElementById('bulk-tag-suggestions');
+    bulkInput.addEventListener('focus', () => {
+        if (bulkSugg.children.length) bulkSugg.style.display = 'block';
+    });
+    bulkInput.addEventListener('input', () => {
+        const val = bulkInput.value.toLowerCase();
+        [...bulkSugg.children].forEach(ch => {
+            ch.style.display = ch.dataset.tag.toLowerCase().includes(val) ? '' : 'none';
+        });
+        bulkSugg.style.display = [...bulkSugg.children].some(ch => ch.style.display !== 'none') ? 'block' : 'none';
+    });
+    document.addEventListener('click', e => {
+        if (!bulkInput.contains(e.target) && !bulkSugg.contains(e.target))
+            bulkSugg.style.display = 'none';
+    });
+
     setupContactsImportModal();
 }
 
@@ -1295,7 +1346,7 @@ function renderContactsTable(contacts, total) {
         const nombre     = c.nombre ? escHtml(c.nombre) : '<span class="dim">—</span>';
         const tagsArr    = c.tags && c.tags.length ? c.tags : (c.etiqueta ? [c.etiqueta] : []);
         const etiquetaHtml = tagsArr.length
-            ? tagsArr.map(t => `<span class="tag tag-lang">${escHtml(t)}</span>`).join(' ')
+            ? tagsArr.map(t => tagBadge(t, c.id)).join(' ')
             : '<span class="dim">—</span>';
         const created  = c.created_at ? new Date(c.created_at).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—';
         const checked  = contactsSelected.has(c.id) ? 'checked' : '';
@@ -1372,16 +1423,29 @@ async function loadTagsFilter() {
                 <input type="checkbox" id="tags-all-check" value="">
                 <span>Todas las etiquetas</span>
             </label>
-            ${etiquetas.map(e => `
-            <label class="tags-option">
-                <input type="checkbox" value="${escHtml(e.tag)}"${currentlySelected.includes(e.tag) ? ' checked' : ''}>
-                <span>${escHtml(e.tag)}</span> <span class="tags-count">(${e.cnt})</span>
-            </label>`).join('')}
+            ${etiquetas.map(e => {
+                const c = tagColor(e.tag);
+                return `<label class="tags-option">
+                    <input type="checkbox" value="${escHtml(e.tag)}"${currentlySelected.includes(e.tag) ? ' checked' : ''}>
+                    <span class="tag tag-colored" style="background:${c.bg};border:1px solid ${c.border};color:${c.text}">${escHtml(e.tag)}</span>
+                    <span class="tags-count">(${e.cnt})</span>
+                </label>`;
+            }).join('')}
         `;
 
-        // Rellenar datalist del bulk input con sugerencias de etiquetas existentes
-        const dl = document.getElementById('bulk-etiqueta-list');
-        if (dl) dl.innerHTML = etiquetas.map(e => `<option value="${escHtml(e.tag)}">`).join('');
+        // Rellenar bulk-tag-suggestions con chips clickeables
+        const sugg = document.getElementById('bulk-tag-suggestions');
+        if (sugg) {
+            sugg.innerHTML = etiquetas.map(e => {
+                const c = tagColor(e.tag);
+                return `<div class="bulk-tag-sugg-item" data-tag="${escHtml(e.tag)}"
+                    style="border-left:3px solid ${c.border}"
+                    onclick="document.getElementById('bulk-etiqueta-input').value=this.dataset.tag;this.parentElement.style.display='none'">
+                    <span style="color:${c.text}">${escHtml(e.tag)}</span>
+                    <span class="tags-count">${e.cnt}</span>
+                </div>`;
+            }).join('');
+        }
 
         // "Todas" checkbox: check it if nothing specific is selected
         const allChk = document.getElementById('tags-all-check');
@@ -1493,6 +1557,82 @@ async function deleteContact(id, telefono) {
         refreshContactsCount();
     } catch (err) {
         alert('Error: ' + err.message);
+    }
+}
+
+async function removeContactTag(contactId, tag) {
+    try {
+        const res  = await authFetch('/api/contacts', {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ ids: [contactId], etiqueta: tag, mode: 'remove' })
+        });
+        if (!res.ok) { const d = await res.json(); return alert(d.error || 'Error'); }
+        loadContacts();
+        loadTagsFilter();
+    } catch (err) { alert(err.message); }
+}
+
+function downloadContactsTemplate() {
+    const csv = 'telefono,nombre,etiqueta\n18091234567,Juan Pérez,Cliente\n18097654321,María García,Promo\n';
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a'); a.href = url;
+    a.download = 'plantilla_contactos.csv'; a.click();
+    URL.revokeObjectURL(url);
+}
+
+function openAddContactModal() {
+    document.getElementById('add-contact-modal').style.display = 'flex';
+    document.getElementById('ac-telefono').value = '';
+    document.getElementById('ac-nombre').value   = '';
+    document.getElementById('ac-etiqueta').value = '';
+    document.getElementById('ac-error').style.display = 'none';
+    document.getElementById('ac-telefono').focus();
+    // Poblar datalist con etiquetas existentes
+    authFetch('/api/contacts?etiquetas=true').then(r => r.json()).then(d => {
+        document.getElementById('ac-etiqueta-list').innerHTML =
+            (d.etiquetas || []).map(e => `<option value="${escHtml(e.tag)}">`).join('');
+    }).catch(() => {});
+}
+function closeAddContactModal() {
+    document.getElementById('add-contact-modal').style.display = 'none';
+}
+async function submitAddContact(e) {
+    e.preventDefault();
+    const telefono = document.getElementById('ac-telefono').value.replace(/\D/g,'');
+    const nombre   = document.getElementById('ac-nombre').value.trim() || null;
+    const etiqueta = document.getElementById('ac-etiqueta').value.trim() || null;
+    const errEl    = document.getElementById('ac-error');
+    const btn      = document.getElementById('ac-submit');
+
+    if (telefono.length < 8) {
+        errEl.textContent = 'El teléfono debe tener al menos 8 dígitos.';
+        errEl.style.display = 'block'; return;
+    }
+    errEl.style.display = 'none';
+    btn.disabled  = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Guardando...';
+
+    try {
+        const contact = { telefono, nombre, etiqueta };
+        const res  = await authFetch('/api/contacts/upload', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ contacts: [contact] })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al guardar');
+        closeAddContactModal();
+        loadContacts();
+        refreshContactsCount();
+        loadTagsFilter();
+    } catch (err) {
+        errEl.textContent   = err.message;
+        errEl.style.display = 'block';
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="ph ph-plus"></i> Agregar';
     }
 }
 
