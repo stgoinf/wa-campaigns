@@ -961,13 +961,31 @@ function generateDynamicFields(template, prefill = null) {
         `);
 
         if (fmt === 'IMAGE') {
-            document.getElementById('df-header-url').addEventListener('input', e => {
-                const url     = e.target.value.trim();
-                const preview = document.getElementById('df-img-preview');
-                const img     = document.getElementById('df-img-tag');
-                if (url) { img.src = url; preview.style.display = 'block'; }
-                else     { preview.style.display = 'none'; }
-            });
+            const urlInput = document.getElementById('df-header-url');
+            const preview  = document.getElementById('df-img-preview');
+            const img      = document.getElementById('df-img-tag');
+
+            function toEmbedUrl(raw) {
+                // Google Drive: https://drive.google.com/file/d/FILE_ID/view  o  uc?id=FILE_ID
+                const driveFile = raw.match(/drive\.google\.com\/file\/d\/([^/?]+)/);
+                if (driveFile) return `https://drive.google.com/thumbnail?id=${driveFile[1]}&sz=w600`;
+                const driveUc = raw.match(/drive\.google\.com\/.*[?&]id=([^&]+)/);
+                if (driveUc) return `https://drive.google.com/thumbnail?id=${driveUc[1]}&sz=w600`;
+                return raw; // URL directa, la usamos tal cual
+            }
+
+            function applyPreview(raw) {
+                if (!raw) { preview.style.display = 'none'; return; }
+                img.src = toEmbedUrl(raw);
+                img.alt = 'Vista previa';
+                preview.style.display = 'block';
+                img.onerror = () => { img.alt = '⚠️ No se puede mostrar la imagen. Verifica la URL.'; };
+            }
+
+            // Aplicar al cargar si ya hay URL (prefill de campaña anterior)
+            if (urlInput.value.trim()) applyPreview(urlInput.value.trim());
+
+            urlInput.addEventListener('input', e => applyPreview(e.target.value.trim()));
         }
     }
 
@@ -1052,8 +1070,9 @@ async function updateContactPreview() {
     try {
         let url = '/api/contacts/count';
         if (source === 'etiqueta' && etiqueta) {
-            const { count } = await sb.from('contacts').select('*', { count:'exact', head:true }).eq('etiqueta', etiqueta);
-            document.getElementById('preview-count').textContent = `${(count ?? 0).toLocaleString()} contactos serán incluidos`;
+            const res  = await authFetch(`/api/contacts?count=true&etiqueta=${encodeURIComponent(etiqueta)}`);
+            const data = await res.json();
+            document.getElementById('preview-count').textContent = `${(data.count ?? 0).toLocaleString()} contactos serán incluidos`;
             return;
         }
         const res  = await authFetch(url);
