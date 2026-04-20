@@ -1689,26 +1689,27 @@ function setupContactsImportModal() {
     document.getElementById('contacts-import-cancel').addEventListener('click', closeContactsImportModal);
     document.getElementById('contacts-import-overlay').addEventListener('click', closeContactsImportModal);
     submitBtn.addEventListener('click', () => {
-        const file = fileInput.files[0];
+        // Usar la variable _pendingFile (guardada al soltar/seleccionar el archivo)
+        // para evitar que la referencia caduque cuando se usan drag & drop
+        const file = window._pendingContactsFile || fileInput.files[0];
         if (file) submitContactsImport(file);
     });
 }
 
 function setContactsFile(file) {
+    // Guardar referencia directa en variable para que no caduque (DataTransfer puede perder la referencia)
+    window._pendingContactsFile = file;
     const nameEl   = document.getElementById('contacts-import-filename');
     const submitBtn= document.getElementById('contacts-import-submit');
     const resultEl = document.getElementById('contacts-import-result');
-    nameEl.textContent  = `📄 ${file.name}`;
-    nameEl.style.display= 'block';
-    submitBtn.disabled  = false;
+    nameEl.textContent     = `📄 ${file.name}`;
+    nameEl.style.display   = 'block';
+    submitBtn.disabled     = false;
     resultEl.style.display = 'none';
-    // Asignar al input para que submitContactsImport pueda leerlo
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    document.getElementById('contacts-csv-input').files = dt.files;
 }
 
 function openContactsImportModal() {
+    window._pendingContactsFile = null;
     document.getElementById('modal-contacts-import').style.display = 'flex';
     document.getElementById('contacts-import-result').style.display   = 'none';
     document.getElementById('contacts-import-filename').style.display = 'none';
@@ -1717,6 +1718,7 @@ function openContactsImportModal() {
 }
 
 function closeContactsImportModal() {
+    window._pendingContactsFile = null;
     document.getElementById('modal-contacts-import').style.display = 'none';
 }
 
