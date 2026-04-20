@@ -1185,7 +1185,11 @@ function setupContacts() {
         }, 400);
     });
 
-    // Filtro etiqueta — toggle dropdown (position:fixed para evitar clipping por backdrop-filter)
+    // Portal: mover el dropdown al <body> para que position:fixed funcione
+    // correctamente (backdrop-filter en glass-panel actúa como containing block)
+    document.body.appendChild(document.getElementById('tags-filter-dropdown'));
+
+    // Filtro etiqueta — toggle dropdown
     document.getElementById('tags-filter-btn').addEventListener('click', e => {
         e.stopPropagation();
         const dd  = document.getElementById('tags-filter-dropdown');
@@ -1199,16 +1203,16 @@ function setupContacts() {
             dd.style.display = 'none';
         }
     });
-    // Cerrar dropdown al hacer click fuera o al hacer scroll
+    // Cerrar al hacer click fuera o al hacer scroll
     document.addEventListener('click', e => {
-        const wrap = document.getElementById('tags-filter-wrap');
-        const dd   = document.getElementById('tags-filter-dropdown');
-        if (wrap && !wrap.contains(e.target) && !dd.contains(e.target))
+        const btn = document.getElementById('tags-filter-btn');
+        const dd  = document.getElementById('tags-filter-dropdown');
+        if (!btn.contains(e.target) && !dd.contains(e.target))
             dd.style.display = 'none';
     });
-    document.querySelector('.main-content')?.addEventListener('scroll', () => {
+    window.addEventListener('scroll', () => {
         document.getElementById('tags-filter-dropdown').style.display = 'none';
-    });
+    }, true);
 
     // Filtro último envío (preset)
     document.getElementById('contacts-sent-preset').addEventListener('change', e => {
