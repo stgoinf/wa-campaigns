@@ -1280,6 +1280,26 @@ input[type="checkbox"]#contacts-check-all {
     font-size: 0.82rem !important;
 }
 
+.bulk-mode-toggle {
+    display: flex;
+    gap: 0.2rem;
+    flex-shrink: 0;
+}
+.bulk-mode-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.bulk-mode-btn:hover  { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+.bulk-mode-btn.active { background: rgba(16,185,129,0.2); border-color: var(--accent-green); color: var(--accent-green); }
+.bulk-mode-btn.bulk-mode-remove.active { background: rgba(239,68,68,0.15); border-color: #f87171; color: #f87171; }
+
 /* ─────────────────────────────────────────────
    Responsive
 ───────────────────────────────────────────── */

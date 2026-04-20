@@ -587,11 +587,44 @@ function setupCampaigns() {
     document.getElementById('btn-pause-campaign').addEventListener('click', pauseActiveCampaign);
     document.getElementById('form-campaign').addEventListener('submit', submitCampaign);
     document.getElementById('f-source').addEventListener('change', e => {
-        document.getElementById('f-etiqueta-group').style.display =
-            e.target.value === 'etiqueta' ? 'block' : 'none';
+        const show = e.target.value === 'etiqueta';
+        document.getElementById('f-etiqueta-group').style.display = show ? 'block' : 'none';
+        if (show) loadEtiquetasIntoSelect();
         updateContactPreview();
     });
-    document.getElementById('f-etiqueta').addEventListener('input', updateContactPreview);
+    document.getElementById('f-etiqueta').addEventListener('change', updateContactPreview);
+
+    // Modo de etiqueta en bloque (Agregar / Reemplazar / Quitar)
+    let bulkTagMode = 'add';
+    document.querySelectorAll('.bulk-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.bulk-mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            bulkTagMode = btn.id === 'bulk-mode-add' ? 'add'
+                        : btn.id === 'bulk-mode-replace' ? 'replace'
+                        : 'remove';
+        });
+    });
+    // Guardar el modo en window para que applyBulkEtiqueta() lo lea
+    window._bulkTagMode = () => bulkTagMode;
+}
+
+async function loadEtiquetasIntoSelect() {
+    try {
+        const res  = await authFetch('/api/contacts?etiquetas=true');
+        const data = await res.json();
+        const sel  = document.getElementById('f-etiqueta');
+        const etiquetas = data.etiquetas || [];
+        if (!etiquetas.length) {
+            sel.innerHTML = '<option value="">— Sin etiquetas aún —</option>';
+            return;
+        }
+        sel.innerHTML = '<option value="">Selecciona una etiqueta</option>' +
+            etiquetas.map(e => `<option value="${escHtml(e.tag)}">${escHtml(e.tag)} (${e.cnt})</option>`).join('');
+        updateContactPreview();
+    } catch {
+        document.getElementById('f-etiqueta').innerHTML = '<option value="">Error al cargar etiquetas</option>';
+    }
 }
 
 async function loadCampaigns() {
@@ -1346,6 +1379,10 @@ async function loadTagsFilter() {
             </label>`).join('')}
         `;
 
+        // Rellenar datalist del bulk input con sugerencias de etiquetas existentes
+        const dl = document.getElementById('bulk-etiqueta-list');
+        if (dl) dl.innerHTML = etiquetas.map(e => `<option value="${escHtml(e.tag)}">`).join('');
+
         // "Todas" checkbox: check it if nothing specific is selected
         const allChk = document.getElementById('tags-all-check');
         if (allChk) allChk.checked = currentlySelected.length === 0;
@@ -1420,8 +1457,10 @@ async function applyBulkEtiqueta() {
     const etiqueta = document.getElementById('bulk-etiqueta-input').value.trim();
     const ids      = [...contactsSelected];
     if (!ids.length) return;
+    if (!etiqueta) { alert('Escribe el nombre de la etiqueta.'); return; }
 
-    const btn = document.getElementById('btn-bulk-apply');
+    const mode = window._bulkTagMode ? window._bulkTagMode() : 'add';
+    const btn  = document.getElementById('btn-bulk-apply');
     btn.disabled  = true;
     btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i>';
 
@@ -1429,18 +1468,19 @@ async function applyBulkEtiqueta() {
         const res  = await authFetch('/api/contacts', {
             method:  'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ ids, etiqueta })
+            body:    JSON.stringify({ ids, etiqueta, mode })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al aplicar etiqueta');
         document.getElementById('bulk-etiqueta-input').value = '';
         clearContactSelection();
         loadContacts();
+        loadTagsFilter(); // refrescar el dropdown de filtros con las nuevas etiquetas
     } catch (err) {
         alert('Error: ' + err.message);
     } finally {
         btn.disabled  = false;
-        btn.innerHTML = '<i class="ph ph-check"></i> Aplicar etiqueta';
+        btn.innerHTML = '<i class="ph ph-check"></i> Aplicar';
     }
 }
 
