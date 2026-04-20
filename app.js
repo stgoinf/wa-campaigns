@@ -1472,9 +1472,12 @@ async function loadTagsFilter() {
             cb.addEventListener('change', () => {
                 // If "Todas" was clicked, uncheck specific tags; if specific was clicked, uncheck "Todas"
                 if (cb.value === '') {
-                    if (cb.checked) dropdown.querySelectorAll('input[type=checkbox]:not(#tags-all-check)').forEach(c => c.checked = false);
+                    // "Todas" marcado → selecciona todas las etiquetas individuales
+                    dropdown.querySelectorAll('input[type=checkbox]:not(#tags-all-check)').forEach(c => c.checked = cb.checked);
                 } else {
-                    if (allChk) allChk.checked = false;
+                    // Si todas las individuales están marcadas → marcar "Todas" también; si alguna se desmarcó → desmarcar "Todas"
+                    const allSpecific = [...dropdown.querySelectorAll('input[type=checkbox]:not(#tags-all-check)')];
+                    if (allChk) allChk.checked = allSpecific.every(c => c.checked);
                 }
                 updateTagsFilterLabel();
                 contactsCurrentPage = 1;
@@ -1487,14 +1490,18 @@ async function loadTagsFilter() {
 }
 
 function getSelectedTags() {
+    const allChk = document.getElementById('tags-all-check');
+    // Si "Todas" está marcado → sin filtro (igual que no seleccionar ninguna)
+    if (allChk && allChk.checked) return [];
     return [...document.querySelectorAll('#tags-filter-dropdown input[type=checkbox]:checked')]
         .map(cb => cb.value).filter(v => v);
 }
 
 function updateTagsFilterLabel() {
     const selected = getSelectedTags();
+    const allChk   = document.getElementById('tags-all-check');
     document.getElementById('tags-filter-label').textContent =
-        selected.length === 0 ? 'Todas las etiquetas' :
+        (selected.length === 0 || (allChk && allChk.checked)) ? 'Todas las etiquetas' :
         selected.length === 1 ? selected[0] :
         `${selected.length} etiquetas`;
 }
