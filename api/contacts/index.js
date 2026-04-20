@@ -15,12 +15,12 @@ module.exports = async function handler(req, res) {
 
     // ── GET ──────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-        // count-only
+        // count-only (opcionalmente filtrado por etiqueta)
         if (req.query.count === 'true') {
-            const { count, error } = await sb
-                .from('contacts')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', userId);
+            const etiquetaFilter = (req.query.etiqueta || '').trim();
+            let q = sb.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId);
+            if (etiquetaFilter) q = q.contains('tags', [etiquetaFilter]);
+            const { count, error } = await q;
             if (error) return res.status(500).json({ error: error.message });
             return res.json({ count: count || 0 });
         }
