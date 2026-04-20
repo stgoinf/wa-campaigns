@@ -1185,17 +1185,29 @@ function setupContacts() {
         }, 400);
     });
 
-    // Filtro etiqueta — toggle dropdown
+    // Filtro etiqueta — toggle dropdown (position:fixed para evitar clipping por backdrop-filter)
     document.getElementById('tags-filter-btn').addEventListener('click', e => {
         e.stopPropagation();
-        const dd = document.getElementById('tags-filter-dropdown');
-        dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+        const dd  = document.getElementById('tags-filter-dropdown');
+        const btn = document.getElementById('tags-filter-btn');
+        if (dd.style.display === 'none' || !dd.style.display) {
+            const rect = btn.getBoundingClientRect();
+            dd.style.top  = (rect.bottom + 6) + 'px';
+            dd.style.left = rect.left + 'px';
+            dd.style.display = 'block';
+        } else {
+            dd.style.display = 'none';
+        }
     });
-    // Cerrar dropdown al hacer click fuera
+    // Cerrar dropdown al hacer click fuera o al hacer scroll
     document.addEventListener('click', e => {
         const wrap = document.getElementById('tags-filter-wrap');
-        if (wrap && !wrap.contains(e.target))
-            document.getElementById('tags-filter-dropdown').style.display = 'none';
+        const dd   = document.getElementById('tags-filter-dropdown');
+        if (wrap && !wrap.contains(e.target) && !dd.contains(e.target))
+            dd.style.display = 'none';
+    });
+    document.querySelector('.main-content')?.addEventListener('scroll', () => {
+        document.getElementById('tags-filter-dropdown').style.display = 'none';
     });
 
     // Filtro último envío (preset)
