@@ -738,7 +738,7 @@ function renderCampaignsTable(campaigns) {
 
 async function startCampaign(id) {
     try {
-        const res = await authFetch(`/api/campaigns/start?id=${id}`, { method: 'POST' });
+        const res = await authFetch(`/api/campaigns/manage?action=start&id=${id}`, { method: 'POST' });
         if (!res.ok) return alert((await res.json()).error);
 
         activeCampaignId = id;
@@ -776,7 +776,7 @@ async function runCampaignLoop(campaignId) {
 
         if (!pending) {
             // Todos enviados → completar
-            await authFetch(`/api/campaigns/complete?id=${campaignId}`, { method: 'POST' });
+            await authFetch(`/api/campaigns/manage?action=complete&id=${campaignId}`, { method: 'POST' });
             campaignRunning = false;
             break;
         }
@@ -798,7 +798,7 @@ async function runCampaignLoop(campaignId) {
 
 async function pauseCampaign(id) {
     campaignRunning = false;
-    await authFetch(`/api/campaigns/pause?id=${id}`, { method: 'POST' });
+    await authFetch(`/api/campaigns/manage?action=pause&id=${id}`, { method: 'POST' });
     loadCampaigns();
 }
 
