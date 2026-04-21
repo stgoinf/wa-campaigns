@@ -225,12 +225,11 @@ const contactsCount   = document.getElementById('contacts-count');
 function init() {
     showLoader(false);
     setupNavigation();
-    setupAnalytics();
     setupConfig();
     setupCampaigns();
     setupContacts();
     setupErrorsModal();
-    refreshContactsCount();
+    loadCampaigns(); // cargar campañas al inicio (tab por defecto)
 }
 
 // ─────────────────────────────────────────────
@@ -244,7 +243,6 @@ function setupNavigation() {
             document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
             item.classList.add('active');
             document.getElementById(`tab-${tab}`).classList.add('active');
-            document.getElementById('filters-panel').style.display = tab === 'analytics' ? 'block' : 'none';
             if (tab === 'campaigns') loadCampaigns();
             if (tab === 'contacts')  { loadContacts(); loadTagsFilter(); }
             if (tab === 'config')    loadConfig();
@@ -256,19 +254,7 @@ function setupNavigation() {
 // ══ ANÁLISIS ══════════════════════════════════
 // ═══════════════════════════════════════════════
 
-function setupAnalytics() {
-    csvUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        showLoader(true, 'Procesando CSV...');
-        const reader = new FileReader();
-        reader.onload = evt => parseCSV(evt.target.result, file);
-        reader.readAsText(file);
-    });
-    branchSelect.addEventListener('change', updateDashboard);
-    resetZoomBtn.addEventListener('click', updateDashboard);
-    downloadBtn.addEventListener('click', downloadCSV);
-}
+function setupAnalytics() { /* módulo de análisis eliminado */ }
 
 function parseDateStr(str) {
     if (!str) return null;
@@ -334,13 +320,9 @@ async function syncContactsToBackend(rows) {
 
 async function refreshContactsCount() {
     try {
-        const res  = await authFetch('/api/contacts?count=true');
-        const data = await res.json();
-        if (data.count > 0) {
-            contactsCount.textContent  = data.count.toLocaleString();
-            contactsBadge.style.display = 'flex';
-        }
-    } catch { /* backend no disponible */ }
+        // Badge del sidebar eliminado — función conservada para compatibilidad
+        await loadContactsStats();
+    } catch { /* silencioso */
 }
 
 function getFilteredData() {
@@ -701,37 +683,112 @@ function renderCampaignsTable(campaigns) {
         </td></tr>`;
         return;
     }
-    tbody.innerHTML = campaigns.map(c => {
-        const safeName = c.nombre.replace(/'/g, "\\'");
-        const failedCell = c.fallidos > 0
-            ? `<button class="btn-failed-link" onclick="showCampaignErrors(${c.id},'${safeName}')">${c.fallidos.toLocaleString()} <i class="ph ph-info"></i></button>`
-            : '0';
-        return `
-        <tr>
-            <td><strong>${escHtml(c.nombre)}</strong></td>
-            <td><code>${escHtml(c.template_name)}</code></td>
-            <td>${c.total.toLocaleString()}</td>
-            <td class="col-sent">${c.enviados.toLocaleString()}</td>
-            <td class="col-delivered">${c.entregados.toLocaleString()}</td>
-            <td class="col-read">${c.leidos.toLocaleString()}</td>
-            <td class="col-failed">${failedCell}</td>
-            <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
-            <td class="actions-cell">
-                ${['draft','paused'].includes(c.status) ? `
-                    <button class="btn-icon-green" onclick="startCampaign(${c.id})" title="Iniciar">
-                        <i class="ph ph-play"></i>
-                    </button>` : ''}
-                ${c.status === 'running' ? `
-                    <button class="btn-icon-warn" onclick="pauseCampaign(${c.id})" title="Pausar">
-                        <i class="ph ph-pause"></i>
-                    </button>` : ''}
-                ${c.status !== 'running' ? `
-                    <button class="btn-icon-red" onclick="deleteCampaign(${c.id})" title="Eliminar">
-                        <i class="ph ph-trash"></i>
-                    </button>` : ''}
-            </td>
-        </tr>`;
-    }).join('');
+
+    // ── Agrupar campañas por nombre ──────────────────────────────────────────
+    const groupMap = new Map();
+    campaigns.forEach(c => {
+        if (!groupMap.has(c.nombre)) groupMap.set(c.nombre, []);
+        groupMap.get(c.nombre).push(c);
+    });
+
+    const rows = [];
+    let groupIdx = 0;
+    groupMap.forEach((group, nombre) => {
+        if (group.length === 1) {
+            // Fila individual — render normal
+            const c = group[0];
+            const safeName  = c.nombre.replace(/'/g, "\\'");
+            const failedCell = c.fallidos > 0
+                ? `<button class="btn-failed-link" onclick="showCampaignErrors(${c.id},'${safeName}')">${c.fallidos.toLocaleString()} <i class="ph ph-info"></i></button>`
+                : '0';
+            rows.push(`
+            <tr>
+                <td><strong>${escHtml(c.nombre)}</strong></td>
+                <td><code>${escHtml(c.template_name)}</code></td>
+                <td>${c.total.toLocaleString()}</td>
+                <td class="col-sent">${c.enviados.toLocaleString()}</td>
+                <td class="col-delivered">${c.entregados.toLocaleString()}</td>
+                <td class="col-read">${c.leidos.toLocaleString()}</td>
+                <td class="col-failed">${failedCell}</td>
+                <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
+                <td class="actions-cell">
+                    ${['draft','paused'].includes(c.status) ? `<button class="btn-icon-green" onclick="startCampaign(${c.id})" title="Iniciar"><i class="ph ph-play"></i></button>` : ''}
+                    ${c.status === 'running' ? `<button class="btn-icon-warn" onclick="pauseCampaign(${c.id})" title="Pausar"><i class="ph ph-pause"></i></button>` : ''}
+                    ${c.status !== 'running' ? `<button class="btn-icon-red" onclick="deleteCampaign(${c.id})" title="Eliminar"><i class="ph ph-trash"></i></button>` : ''}
+                </td>
+            </tr>`);
+        } else {
+            // Fila agrupada — suma de stats
+            const gIdx       = groupIdx++;
+            const totalSum   = group.reduce((s, c) => s + (c.total    || 0), 0);
+            const enviadoSum = group.reduce((s, c) => s + (c.enviados  || 0), 0);
+            const entregSum  = group.reduce((s, c) => s + (c.entregados|| 0), 0);
+            const leidoSum   = group.reduce((s, c) => s + (c.leidos    || 0), 0);
+            const fallidoSum = group.reduce((s, c) => s + (c.fallidos  || 0), 0);
+            const template   = group[0].template_name;
+            // Estado: si hay alguna running→running, si hay paused→paused, else el del primero
+            const dominantStatus = group.find(c => c.status === 'running')?.status
+                                || group.find(c => c.status === 'paused')?.status
+                                || group[0].status;
+            const hasRunning = group.some(c => c.status === 'running');
+
+            rows.push(`
+            <tr class="campaign-group-row">
+                <td>
+                    <button class="expand-btn" onclick="toggleCampaignGroup(${gIdx})" title="Ver campañas individuales">
+                        <i class="ph ph-caret-right" id="cg-icon-${gIdx}"></i>
+                    </button>
+                    <strong>${escHtml(nombre)}</strong>
+                    <span style="font-size:0.72rem;color:var(--text-secondary);margin-left:4px">${group.length} envíos</span>
+                </td>
+                <td><code>${escHtml(template)}</code></td>
+                <td>${totalSum.toLocaleString()}</td>
+                <td class="col-sent">${enviadoSum.toLocaleString()}</td>
+                <td class="col-delivered">${entregSum.toLocaleString()}</td>
+                <td class="col-read">${leidoSum.toLocaleString()}</td>
+                <td class="col-failed">${fallidoSum > 0 ? fallidoSum.toLocaleString() : '0'}</td>
+                <td><span class="status-badge ${dominantStatus}">${statusLabel(dominantStatus)}</span></td>
+                <td class="actions-cell"></td>
+            </tr>
+            <tr class="campaign-group-detail" id="cg-detail-${gIdx}" style="display:none">
+                <td colspan="9" style="padding:0">
+                    <table class="admin-table" style="margin:0;background:rgba(0,0,0,0.15)">
+                        ${group.map(c => {
+                            const sn = c.nombre.replace(/'/g, "\\'");
+                            const fc = c.fallidos > 0
+                                ? `<button class="btn-failed-link" onclick="showCampaignErrors(${c.id},'${sn}')">${c.fallidos.toLocaleString()} <i class="ph ph-info"></i></button>`
+                                : '0';
+                            return `<tr>
+                                <td style="padding-left:2.5rem"><span style="color:var(--text-secondary);font-size:0.8rem">#${c.id}</span></td>
+                                <td><code style="font-size:0.75rem">${escHtml(c.template_name)}</code></td>
+                                <td>${c.total.toLocaleString()}</td>
+                                <td class="col-sent">${c.enviados.toLocaleString()}</td>
+                                <td class="col-delivered">${c.entregados.toLocaleString()}</td>
+                                <td class="col-read">${c.leidos.toLocaleString()}</td>
+                                <td class="col-failed">${fc}</td>
+                                <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
+                                <td class="actions-cell">
+                                    ${['draft','paused'].includes(c.status) ? `<button class="btn-icon-green" onclick="startCampaign(${c.id})" title="Iniciar"><i class="ph ph-play"></i></button>` : ''}
+                                    ${c.status === 'running' ? `<button class="btn-icon-warn" onclick="pauseCampaign(${c.id})" title="Pausar"><i class="ph ph-pause"></i></button>` : ''}
+                                    ${c.status !== 'running' ? `<button class="btn-icon-red" onclick="deleteCampaign(${c.id})" title="Eliminar"><i class="ph ph-trash"></i></button>` : ''}
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </table>
+                </td>
+            </tr>`);
+        }
+    });
+
+    tbody.innerHTML = rows.join('');
+}
+
+function toggleCampaignGroup(idx) {
+    const detail = document.getElementById(`cg-detail-${idx}`);
+    const icon   = document.getElementById(`cg-icon-${idx}`);
+    const open   = detail.style.display !== 'none';
+    detail.style.display = open ? 'none' : 'table-row';
+    icon.className = open ? 'ph ph-caret-right' : 'ph ph-caret-down';
 }
 
 // ── Campaign runner (loop en el browser) ──────
@@ -1467,18 +1524,11 @@ function renderContactsPagination(page, pages, total) {
 
 async function loadContactsStats() {
     try {
-        // Total
-        const resTotal  = await authFetch('/api/contacts/count');
-        const { count } = await resTotal.json();
-
-        // Con envío
-        const { count: sentCount } = await sb
-            .from('contacts').select('*', { count: 'exact', head: true })
-            .not('last_sent_at', 'is', null);
-
-        document.getElementById('cstat-total').textContent = (count || 0).toLocaleString();
-        document.getElementById('cstat-sent').textContent  = (sentCount || 0).toLocaleString();
-        document.getElementById('cstat-never').textContent = ((count || 0) - (sentCount || 0)).toLocaleString();
+        const res  = await authFetch('/api/contacts?stats=true');
+        const data = await res.json();
+        document.getElementById('cstat-total').textContent = (data.total || 0).toLocaleString();
+        document.getElementById('cstat-sent').textContent  = (data.sent  || 0).toLocaleString();
+        document.getElementById('cstat-never').textContent = (data.never || 0).toLocaleString();
     } catch { /* silencioso */ }
 }
 

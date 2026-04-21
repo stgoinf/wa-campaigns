@@ -104,10 +104,7 @@
 
         <!-- Navegación principal -->
         <nav class="sidebar-nav">
-            <a class="nav-item active" data-tab="analytics">
-                <i class="ph ph-chart-bar"></i> Análisis
-            </a>
-            <a class="nav-item" data-tab="campaigns">
+            <a class="nav-item active" data-tab="campaigns">
                 <i class="ph ph-paper-plane-tilt"></i> Campañas
             </a>
             <a class="nav-item" data-tab="contacts">
@@ -117,41 +114,6 @@
                 <i class="ph ph-gear"></i> Configuración
             </a>
         </nav>
-
-        <!-- Filtros (solo visible en Análisis) -->
-        <div class="filter-section" id="filters-panel">
-            <h3><i class="ph ph-funnel"></i> Filtros</h3>
-
-            <div class="filter-group">
-                <label for="date-range-picker">Rango de Fechas</label>
-                <input type="text" id="date-range-picker" class="glass-select" placeholder="Selecciona un rango">
-            </div>
-
-            <div class="filter-group">
-                <label for="branch-select">Sucursal</label>
-                <select id="branch-select" class="glass-select">
-                    <option value="all">Todas las sucursales</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Acciones de archivo -->
-        <div class="upload-section">
-            <label for="csv-upload" class="upload-btn">
-                <i class="ph ph-upload-simple"></i> Cargar CSV
-            </label>
-            <input type="file" id="csv-upload" accept=".csv" hidden>
-
-            <button id="download-csv" class="download-btn" disabled>
-                <i class="ph ph-download-simple"></i> Descargar Clientes
-            </button>
-        </div>
-
-        <!-- Contador de contactos en DB -->
-        <div class="contacts-badge" id="contacts-badge" style="display:none">
-            <i class="ph ph-address-book"></i>
-            <span id="contacts-count">0</span> contactos en DB
-        </div>
 
         <!-- Enlace admin (solo visible para el admin) -->
         <a id="admin-link" href="/admin.html" style="display:none;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-radius:8px;font-size:0.78rem;color:#fbbf24;text-decoration:none;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);margin-bottom:0.5rem;transition:all 0.2s">
@@ -173,56 +135,8 @@
     <!-- ─── Contenido principal ─── -->
     <main class="main-content">
 
-        <!-- ════════ Tab: Análisis ════════ -->
-        <div id="tab-analytics" class="tab-panel active">
-            <header>
-                <div class="header-titles">
-                    <h1>Dashboard de Clientes</h1>
-                    <p>Análisis de pedidos y demografía por sucursal</p>
-                </div>
-            </header>
-
-            <div class="kpi-cards">
-                <div class="kpi-card glass-panel">
-                    <div class="kpi-icon"><i class="ph ph-users"></i></div>
-                    <div class="kpi-info">
-                        <p>Usuarios Únicos</p>
-                        <h2 id="kpi-users">0</h2>
-                    </div>
-                </div>
-                <div class="kpi-card glass-panel">
-                    <div class="kpi-icon"><i class="ph ph-shopping-bag"></i></div>
-                    <div class="kpi-info">
-                        <p>Total de Pedidos</p>
-                        <h2 id="kpi-orders">0</h2>
-                    </div>
-                </div>
-                <div class="kpi-card glass-panel">
-                    <div class="kpi-icon"><i class="ph ph-storefront"></i></div>
-                    <div class="kpi-info">
-                        <p>Sucursal Principal</p>
-                        <h2 id="kpi-top-branch">-</h2>
-                    </div>
-                </div>
-            </div>
-
-            <div class="charts-container">
-                <div class="chart-wrapper glass-panel">
-                    <div class="chart-header">
-                        <h2>Porcentaje de Usuarios por Sucursal</h2>
-                        <button id="reset-zoom" class="icon-btn" title="Refrescar">
-                            <i class="ph ph-arrows-clockwise"></i>
-                        </button>
-                    </div>
-                    <div class="canvas-container">
-                        <canvas id="branchChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- ════════ Tab: Campañas ════════ -->
-        <div id="tab-campaigns" class="tab-panel">
+        <div id="tab-campaigns" class="tab-panel active">
             <header>
                 <div class="header-titles">
                     <h1>Campañas WhatsApp</h1>

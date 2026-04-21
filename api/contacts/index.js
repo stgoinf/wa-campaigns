@@ -25,6 +25,18 @@ module.exports = async function handler(req, res) {
             return res.json({ count: count || 0 });
         }
 
+        // stats: total, con_envio, sin_envio
+        if (req.query.stats === 'true') {
+            const [
+                { count: total },
+                { count: sent }
+            ] = await Promise.all([
+                sb.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+                sb.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId).not('last_sent_at', 'is', null),
+            ]);
+            return res.json({ total: total || 0, sent: sent || 0, never: (total || 0) - (sent || 0) });
+        }
+
         // all unique tags with contact counts (scoped to this user)
         if (req.query.etiquetas === 'true') {
             const { data, error } = await sb.rpc('get_all_tags_with_counts', { p_user_id: userId });
