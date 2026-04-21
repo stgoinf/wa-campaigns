@@ -465,6 +465,25 @@ header p { color: var(--text-secondary); }
 .col-read      { color: #a78bfa; }
 .col-failed    { color: var(--accent-red); }
 
+/* Columna de nombre de campaña — truncar si es muy largo */
+#campaigns-table td:first-child {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Fila agrupada */
+.campaign-group-row td:first-child {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+}
+.campaign-group-detail td { padding: 0 !important; border-bottom: none !important; }
+
 .actions-cell  { display: flex; gap: 0.25rem; align-items: center; }
 
 .empty-state {
