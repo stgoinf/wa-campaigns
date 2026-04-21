@@ -39,10 +39,15 @@ function showLoginForm() {
     document.getElementById('auth-subtitle').textContent = 'Inicia sesión para continuar';
 }
 
+const ADMIN_EMAIL = 'santiago.infante@botcity.com.do';
+
 function showApp(user) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     document.getElementById('user-email').textContent = user.email;
+    if (user.email === ADMIN_EMAIL) {
+        document.getElementById('admin-link').style.display = 'flex';
+    }
 }
 
 function setupAuth() {
