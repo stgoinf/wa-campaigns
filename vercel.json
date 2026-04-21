@@ -5,8 +5,6 @@
   "functions": {
     "api/**/*.js": { "maxDuration": 30 }
   },
-  "rewrites": [
-    { "source": "/admin", "destination": "/admin.html" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+  "cleanUrls": true,
+  "trailingSlash": false
 }
