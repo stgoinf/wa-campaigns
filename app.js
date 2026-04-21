@@ -322,7 +322,7 @@ async function refreshContactsCount() {
     try {
         // Badge del sidebar eliminado — función conservada para compatibilidad
         await loadContactsStats();
-    } catch { /* silencioso */
+    } catch { /* silencioso */ }
 }
 
 function getFilteredData() {
