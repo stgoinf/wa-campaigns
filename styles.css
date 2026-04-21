@@ -1443,3 +1443,77 @@ input[type="checkbox"]#contacts-check-all {
 .tags-option:hover  { background: rgba(255,255,255,0.07); }
 .tags-option input  { accent-color: var(--accent-green); cursor: pointer; }
 .tags-count         { color: var(--text-secondary); font-size: 0.75rem; margin-left: auto; }
+
+/* ─── Fase 2: Onboarding ─────────────────────────────────────────────────── */
+
+/* Banner de credenciales */
+.onboarding-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    background: rgba(245,158,11,0.1);
+    border: 1px solid rgba(245,158,11,0.35);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+.onboarding-banner-icon { font-size: 1.5rem; color: #fbbf24; flex-shrink: 0; margin-top: 0.1rem; }
+.onboarding-banner-body strong { color: #fbbf24; display: block; margin-bottom: 0.25rem; }
+.onboarding-banner-body p { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+.onboarding-banner-body a { color: #fbbf24; text-decoration: underline; }
+
+/* 3 pasos en Campañas */
+.onboarding-steps-wrap {
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+}
+.onboarding-steps-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+.onboarding-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.onboarding-step {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 1.5rem 1.25rem;
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    transition: border-color 0.2s;
+}
+.onboarding-step:hover { border-color: rgba(37,211,102,0.3); }
+.step-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--accent-green, #25d366);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: flex; align-items: center; justify-content: center;
+}
+.step-icon { font-size: 2rem; color: var(--accent-green, #25d366); }
+.onboarding-step h4 { margin: 0; font-size: 0.95rem; }
+.onboarding-step p  { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
+.onboarding-step-arrow { color: var(--text-secondary); font-size: 1.2rem; }
+
+/* Empty state de contactos con CTA */
+.empty-state-contacts {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: var(--text-secondary);
+}

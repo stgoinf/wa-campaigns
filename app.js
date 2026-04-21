@@ -494,6 +494,11 @@ async function loadConfig() {
         document.getElementById('cfg-phone-id').value          = data.wa_phone_number_id     || '';
         document.getElementById('cfg-business-id').value       = data.wa_business_account_id || '';
 
+        // Mostrar banner si faltan credenciales
+        const missingCreds = !data.wa_phone_number_id || !data.wa_business_account_id;
+        const banner = document.getElementById('cfg-setup-banner');
+        if (banner) banner.style.display = missingCreds ? 'flex' : 'none';
+
         if (data.wa_access_token_updated_at) {
             document.getElementById('cfg-token-updated').textContent =
                 'Actualizado: ' + new Date(data.wa_access_token_updated_at).toLocaleString('es');
@@ -653,8 +658,42 @@ async function loadCampaigns() {
 function renderCampaignsTable(campaigns) {
     const tbody = document.getElementById('campaigns-tbody');
     if (!campaigns.length) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
-            <i class="ph ph-paper-plane-tilt"></i><p>No hay campañas aún.</p></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="padding:0;border:none">
+            <div class="onboarding-steps-wrap">
+                <p class="onboarding-steps-title"><i class="ph ph-rocket-launch"></i> ¡Empieza en 3 pasos!</p>
+                <div class="onboarding-steps">
+                    <div class="onboarding-step">
+                        <div class="step-num">1</div>
+                        <i class="ph-fill ph-gear-six step-icon"></i>
+                        <h4>Conecta WhatsApp</h4>
+                        <p>Guarda tus credenciales de WhatsApp Business API.</p>
+                        <button class="btn-ghost btn-sm" onclick="document.querySelector('[data-tab=config]').click()">
+                            <i class="ph ph-arrow-right"></i> Ir a Configuración
+                        </button>
+                    </div>
+                    <div class="onboarding-step-arrow"><i class="ph ph-arrow-right"></i></div>
+                    <div class="onboarding-step">
+                        <div class="step-num">2</div>
+                        <i class="ph-fill ph-address-book step-icon"></i>
+                        <h4>Importa tus clientes</h4>
+                        <p>Sube un CSV con los teléfonos de tus contactos.</p>
+                        <button class="btn-ghost btn-sm" onclick="document.querySelector('[data-tab=contacts]').click()">
+                            <i class="ph ph-arrow-right"></i> Ir a Clientes
+                        </button>
+                    </div>
+                    <div class="onboarding-step-arrow"><i class="ph ph-arrow-right"></i></div>
+                    <div class="onboarding-step">
+                        <div class="step-num">3</div>
+                        <i class="ph-fill ph-paper-plane-tilt step-icon"></i>
+                        <h4>Crea tu campaña</h4>
+                        <p>Elige una plantilla, selecciona tus contactos y envía.</p>
+                        <button class="btn-primary btn-sm" onclick="openCampaignModal()">
+                            <i class="ph ph-plus"></i> Nueva campaña
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </td></tr>`;
         return;
     }
     tbody.innerHTML = campaigns.map(c => {
@@ -1351,9 +1390,23 @@ function renderContactsTable(contacts, total) {
     const tbody = document.getElementById('contacts-tbody');
 
     if (!contacts.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">
-            <i class="ph ph-address-book"></i>
-            <p>${contactsCurrentSearch || getSelectedTags().length || contactsCurrentPreset ? 'No se encontraron contactos con ese filtro.' : 'No hay contactos. Importa un CSV para comenzar.'}</p>
+        const hasFilter = contactsCurrentSearch || getSelectedTags().length || contactsCurrentPreset;
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:0;border:none">
+            <div class="empty-state-contacts">
+                <i class="ph ph-address-book" style="font-size:2.5rem;color:var(--text-secondary);margin-bottom:0.75rem"></i>
+                ${hasFilter
+                    ? '<p>No se encontraron contactos con ese filtro.</p>'
+                    : `<p style="font-size:1rem;margin-bottom:1rem">Aún no tienes contactos. Importa tu primer CSV para comenzar.</p>
+                       <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap">
+                           <button class="btn-ghost btn-sm" onclick="downloadContactsTemplate()">
+                               <i class="ph ph-download-simple"></i> Descargar plantilla CSV
+                           </button>
+                           <button class="btn-primary btn-sm" onclick="openContactsImportModal()">
+                               <i class="ph ph-upload-simple"></i> Importar clientes CSV
+                           </button>
+                       </div>`
+                }
+            </div>
         </td></tr>`;
         return;
     }
