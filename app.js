@@ -806,50 +806,62 @@ async function startCampaign(id) {
         subscribeToRealtime(id);
         loadCampaigns();
 
-        runCampaignLoop(id);
+        runCampaignLoop(id, camp);
     } catch (err) {
         alert('Error al iniciar: ' + err.message);
     }
 }
 
-async function runCampaignLoop(campaignId) {
-    const RATE_MS = 300;
-    const delay   = ms => new Promise(r => setTimeout(r, ms));
+async function runCampaignLoop(campaignId, campData) {
+    const BATCH_SIZE         = 3;    // mensajes en paralelo por lote
+    const BATCH_DELAY_MS     = 150;  // pausa entre lotes (ms)
+    const STATUS_CHECK_EVERY = 15;   // revisar pausa remota cada N mensajes
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+
+    let sentCount = 0;
 
     while (campaignRunning) {
-        // Revisar si fue pausada externamente
-        const campRes = await authFetch(`/api/campaigns/${campaignId}`);
-        const camp    = await campRes.json();
-        if (camp.status !== 'running') { campaignRunning = false; break; }
+        // Revisar pausa externa solo cada STATUS_CHECK_EVERY mensajes
+        if (sentCount > 0 && sentCount % STATUS_CHECK_EVERY === 0) {
+            const check = await (await authFetch(`/api/campaigns/${campaignId}`)).json();
+            if (check.status !== 'running') { campaignRunning = false; break; }
+        }
 
-        // Obtener el siguiente mensaje pendiente
-        const { data: pending } = await sb
+        // Obtener lote de N mensajes pendientes en una sola consulta
+        const { data: batch } = await sb
             .from('campaign_messages')
             .select('id, telefono')
             .eq('campaign_id', campaignId)
             .eq('status', 'pending')
-            .limit(1)
-            .single();
+            .limit(BATCH_SIZE);
 
-        if (!pending) {
+        if (!batch || batch.length === 0) {
             // Todos enviados → completar
             await authFetch(`/api/campaigns/manage?action=complete&id=${campaignId}`, { method: 'POST' });
             campaignRunning = false;
             break;
         }
 
-        // Enviar via API
-        await authFetch('/api/send', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-                campaignId,
-                messageId: pending.id,
-                telefono:  pending.telefono
+        // Enviar lote en paralelo — pasando datos de campaña para evitar re-consulta en servidor
+        await Promise.all(batch.map(msg =>
+            authFetch('/api/send', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                    campaignId,
+                    messageId:        msg.id,
+                    telefono:         msg.telefono,
+                    templateName:     campData.template_name,
+                    templateLanguage: campData.template_language,
+                    templateParams:   campData.template_params || [],
+                })
             })
-        });
+        ));
 
-        await delay(RATE_MS);
+        sentCount += batch.length;
+
+        // Pausa mínima entre lotes para no saturar la API de WhatsApp
+        if (campaignRunning) await delay(BATCH_DELAY_MS);
     }
 }
 
