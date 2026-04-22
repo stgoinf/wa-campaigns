@@ -1368,8 +1368,11 @@ function setupContacts() {
         if (!btn.contains(e.target) && !dd.contains(e.target))
             dd.style.display = 'none';
     });
-    window.addEventListener('scroll', () => {
-        document.getElementById('tags-filter-dropdown').style.display = 'none';
+    window.addEventListener('scroll', (e) => {
+        const dd = document.getElementById('tags-filter-dropdown');
+        // No cerrar si el scroll ocurre dentro del propio dropdown
+        if (dd && dd.contains(e.target)) return;
+        dd.style.display = 'none';
     }, true);
 
     // Filtro último envío (preset)
