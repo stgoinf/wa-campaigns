@@ -813,12 +813,51 @@ async function startCampaign(id) {
 }
 
 async function runCampaignLoop(campaignId, campData) {
-    const BATCH_SIZE         = 3;    // mensajes en paralelo por lote
-    const BATCH_DELAY_MS     = 150;  // pausa entre lotes (ms)
-    const STATUS_CHECK_EVERY = 15;   // revisar pausa remota cada N mensajes
+    const BATCH_SIZE             = 3;    // mensajes en paralelo por lote
+    const BATCH_DELAY_MS         = 150;  // pausa entre lotes (ms)
+    const STATUS_CHECK_EVERY     = 15;   // revisar pausa remota cada N mensajes
+    const RATE_LIMIT_PAUSE_MS    = 5000; // espera tras rate limit antes de reintentar
+    const MAX_CONSECUTIVE_ERRORS = 10;   // errores seguidos antes de auto-pausar
     const delay = ms => new Promise(r => setTimeout(r, ms));
 
-    let sentCount = 0;
+    let sentCount        = 0;
+    let consecutiveErrors = 0;
+
+    // Envía un mensaje individual con manejo de rate limit (1 reintento automático)
+    async function sendOne(msg) {
+        const body = JSON.stringify({
+            campaignId,
+            messageId:        msg.id,
+            telefono:         msg.telefono,
+            templateName:     campData.template_name,
+            templateLanguage: campData.template_language,
+            templateParams:   campData.template_params || [],
+        });
+
+        let result;
+        try {
+            result = await (await authFetch('/api/send', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+            })).json();
+        } catch { return { success: false, networkError: true }; }
+
+        if (result.rateLimited) {
+            // Rate limit → esperar 5s y reintentar una vez
+            addFeedEntry(msg.telefono, 'failed', '⏸ Rate limit — esperando 5s...');
+            await delay(RATE_LIMIT_PAUSE_MS);
+            if (!campaignRunning) return result;
+            try {
+                result = await (await authFetch('/api/send', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+                })).json();
+                if (result.rateLimited) {
+                    addFeedEntry(msg.telefono, 'failed', '⛔ Rate limit persistente');
+                }
+            } catch { return { success: false, networkError: true }; }
+        }
+
+        return result;
+    }
 
     while (campaignRunning) {
         // Revisar pausa externa solo cada STATUS_CHECK_EVERY mensajes
@@ -842,21 +881,27 @@ async function runCampaignLoop(campaignId, campData) {
             break;
         }
 
-        // Enviar lote en paralelo — pasando datos de campaña para evitar re-consulta en servidor
-        await Promise.all(batch.map(msg =>
-            authFetch('/api/send', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({
-                    campaignId,
-                    messageId:        msg.id,
-                    telefono:         msg.telefono,
-                    templateName:     campData.template_name,
-                    templateLanguage: campData.template_language,
-                    templateParams:   campData.template_params || [],
-                })
-            })
-        ));
+        // Enviar lote en paralelo con manejo de errores por mensaje
+        const results = await Promise.all(batch.map(msg => sendOne(msg)));
+
+        // Contar errores consecutivos
+        for (const r of results) {
+            if (r.success) {
+                consecutiveErrors = 0;
+            } else if (!r.rateLimited) {
+                consecutiveErrors++;
+                if (r.error) addFeedEntry('—', 'failed', `Error: ${r.error}`);
+            }
+        }
+
+        // Auto-pausar si hay demasiados errores seguidos
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            addFeedEntry('—', 'failed', `⛔ ${MAX_CONSECUTIVE_ERRORS} errores seguidos — pausando campaña`);
+            campaignRunning = false;
+            await authFetch(`/api/campaigns/manage?action=pause&id=${campaignId}`, { method: 'POST' });
+            loadCampaigns();
+            break;
+        }
 
         sentCount += batch.length;
 
@@ -1316,16 +1361,13 @@ function setupContacts() {
             dd.style.display = 'none';
         }
     });
-    // Cerrar al hacer click fuera o al hacer scroll
+    // Cerrar al hacer click fuera (el scroll no cierra el dropdown)
     document.addEventListener('click', e => {
         const btn = document.getElementById('tags-filter-btn');
         const dd  = document.getElementById('tags-filter-dropdown');
         if (!btn.contains(e.target) && !dd.contains(e.target))
             dd.style.display = 'none';
     });
-    window.addEventListener('scroll', () => {
-        document.getElementById('tags-filter-dropdown').style.display = 'none';
-    }, true);
 
     // Filtro último envío (preset)
     document.getElementById('contacts-sent-preset').addEventListener('change', e => {

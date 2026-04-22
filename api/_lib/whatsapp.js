@@ -34,7 +34,12 @@ async function sendTemplate(telefono, templateName, languageCode = 'es', compone
     );
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+    if (!res.ok) {
+        const err = new Error(data?.error?.message || `HTTP ${res.status}`);
+        err.code       = data?.error?.code;       // e.g. 130429 = rate limit
+        err.httpStatus = res.status;
+        throw err;
+    }
     return data.messages?.[0]?.id ?? null;
 }
 

@@ -66,6 +66,12 @@ module.exports = async function handler(req, res) {
         res.json({ success: true, waMessageId: waId });
 
     } catch (err) {
+        // Rate limit de Meta — no marcar como fallido, el frontend reintentará
+        const isRateLimit = err.code === 130429 || err.httpStatus === 429;
+        if (isRateLimit) {
+            return res.json({ success: false, rateLimited: true, error: err.message });
+        }
+
         await Promise.all([
             sb.from('campaign_messages')
               .update({ status: 'failed', error: err.message, sent_at: new Date().toISOString() })
