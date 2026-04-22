@@ -1361,19 +1361,13 @@ function setupContacts() {
             dd.style.display = 'none';
         }
     });
-    // Cerrar al hacer click fuera o al hacer scroll
+    // Cerrar al hacer click fuera (el scroll no cierra el dropdown)
     document.addEventListener('click', e => {
         const btn = document.getElementById('tags-filter-btn');
         const dd  = document.getElementById('tags-filter-dropdown');
         if (!btn.contains(e.target) && !dd.contains(e.target))
             dd.style.display = 'none';
     });
-    window.addEventListener('scroll', (e) => {
-        const dd = document.getElementById('tags-filter-dropdown');
-        // No cerrar si el scroll ocurre dentro del propio dropdown
-        if (dd && dd.contains(e.target)) return;
-        dd.style.display = 'none';
-    }, true);
 
     // Filtro último envío (preset)
     document.getElementById('contacts-sent-preset').addEventListener('change', e => {
