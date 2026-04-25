@@ -33,12 +33,22 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'nombre y templateName son obligatorios' });
         }
 
-        // Obtener contactos del usuario según la fuente
-        let query = sb.from('contacts').select('telefono').eq('user_id', userId);
-        if (source === 'etiqueta' && etiqueta) query = query.contains('tags', [etiqueta]);
-
-        const { data: contacts, error: cErr } = await query;
-        if (cErr) return res.status(500).json({ error: cErr.message });
+        // Obtener TODOS los contactos paginando (Supabase limita a 1000 filas por query)
+        const PAGE = 10000;
+        let contacts = [];
+        let from = 0;
+        while (true) {
+            let query = sb.from('contacts')
+                .select('telefono')
+                .eq('user_id', userId)
+                .range(from, from + PAGE - 1);
+            if (source === 'etiqueta' && etiqueta) query = query.contains('tags', [etiqueta]);
+            const { data: page, error: cErr } = await query;
+            if (cErr) return res.status(500).json({ error: cErr.message });
+            if (page && page.length) contacts = contacts.concat(page);
+            if (!page || page.length < PAGE) break;
+            from += PAGE;
+        }
         if (!contacts.length) return res.status(400).json({ error: 'No hay contactos para esta selección' });
 
         // Crear campaña con user_id
