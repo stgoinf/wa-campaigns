@@ -33,8 +33,9 @@ module.exports = async function handler(req, res) {
             return res.status(400).json({ error: 'nombre y templateName son obligatorios' });
         }
 
-        // Obtener TODOS los contactos paginando (Supabase limita a 1000 filas por query)
-        const PAGE = 10000;
+        // Obtener TODOS los contactos paginando en bloques de 1000
+        // (Supabase/PostgREST tiene max_rows=1000 por defecto — hay que paginar)
+        const PAGE = 1000;
         let contacts = [];
         let from = 0;
         while (true) {
@@ -46,7 +47,7 @@ module.exports = async function handler(req, res) {
             const { data: page, error: cErr } = await query;
             if (cErr) return res.status(500).json({ error: cErr.message });
             if (page && page.length) contacts = contacts.concat(page);
-            if (!page || page.length < PAGE) break;
+            if (!page || page.length < PAGE) break; // última página
             from += PAGE;
         }
         if (!contacts.length) return res.status(400).json({ error: 'No hay contactos para esta selección' });
