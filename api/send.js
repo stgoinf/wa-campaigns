@@ -22,27 +22,23 @@ module.exports = async function handler(req, res) {
 
     const sb = adminClient();
 
-    let tmplName, tmplLang, tmplParams;
+    // Siempre validar la campaña contra el usuario — evita que templateName del
+    // frontend se use con una campaña ajena o en estado incorrecto.
+    const { data: camp, error: cErr } = await sb
+        .from('campaigns')
+        .select('template_name, template_language, template_params, status')
+        .eq('id', campaignId)
+        .eq('user_id', userId)
+        .single();
+    if (cErr || !camp) return res.status(404).json({ error: 'Campaña no encontrada' });
+    if (camp.status !== 'running') return res.status(400).json({ error: 'Campaña no está en ejecución' });
 
-    if (templateName) {
-        // Datos de plantilla enviados desde el frontend — evita consulta DB por mensaje
-        tmplName   = templateName;
-        tmplLang   = templateLanguage || 'es';
-        tmplParams = templateParams   || [];
-    } else {
-        // Fallback: consultar campaña (compatibilidad con llamadas sin datos de plantilla)
-        const { data: camp, error: cErr } = await sb
-            .from('campaigns')
-            .select('template_name, template_language, template_params, status')
-            .eq('id', campaignId)
-            .eq('user_id', userId)
-            .single();
-        if (cErr || !camp) return res.status(404).json({ error: 'Campaña no encontrada' });
-        if (camp.status !== 'running') return res.status(400).json({ error: 'Campaña no está en ejecución' });
-        tmplName   = camp.template_name;
-        tmplLang   = camp.template_language;
-        tmplParams = camp.template_params || [];
-    }
+    // Si el frontend envía los datos de plantilla, deben coincidir con los de la campaña
+    const tmplName   = camp.template_name;
+    const tmplLang   = camp.template_language;
+    const tmplParams = templateParams && camp.template_params
+        ? templateParams   // parámetros variables (body vars) pueden venir del frontend
+        : camp.template_params || [];
 
     try {
         const waId = await sendTemplate(telefono, tmplName, tmplLang, tmplParams, userId);
@@ -52,7 +48,8 @@ module.exports = async function handler(req, res) {
         await Promise.all([
             sb.from('campaign_messages')
               .update({ status: 'sent', wa_message_id: waId, sent_at: now })
-              .eq('id', messageId),
+              .eq('id', messageId)
+              .eq('campaign_id', campaignId),
             sb.rpc('increment_campaign_sent', { campaign_id: campaignId }),
         ]);
 
@@ -75,7 +72,8 @@ module.exports = async function handler(req, res) {
         await Promise.all([
             sb.from('campaign_messages')
               .update({ status: 'failed', error: err.message, sent_at: new Date().toISOString() })
-              .eq('id', messageId),
+              .eq('id', messageId)
+              .eq('campaign_id', campaignId),
             sb.rpc('increment_campaign_failed', { campaign_id: campaignId }),
         ]);
         res.json({ success: false, error: err.message });

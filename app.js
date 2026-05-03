@@ -703,7 +703,7 @@ function renderCampaignsTable(campaigns) {
                 : '0';
             rows.push(`
             <tr>
-                <td><strong>${escHtml(c.nombre)}</strong></td>
+                <td title="${escHtml(c.nombre)}"><strong>${escHtml(c.nombre)}</strong></td>
                 <td><code>${escHtml(c.template_name)}</code></td>
                 <td>${c.total.toLocaleString()}</td>
                 <td class="col-sent">${c.enviados.toLocaleString()}</td>
@@ -1057,7 +1057,10 @@ function renderTemplateList(templates) {
                          : '';
         const safeName   = t.name.replace(/'/g, "\\'");
         return `
-        <li class="tl-item" data-name="${escHtml(t.name)}" onclick="selectTemplate('${safeName}')">
+        <li class="tl-item" data-name="${escHtml(t.name)}"
+            role="option" aria-selected="false" tabindex="0"
+            onclick="selectTemplate('${safeName}')"
+            onkeydown="handleTemplateKey(event,'${safeName}')">
             <div class="tl-name">${mediaIcon}<strong>${escHtml(t.name)}</strong>
                 <span class="tag tag-lang">${escHtml(t.language)}</span></div>
             <div class="tl-preview">${escHtml(preview)}${more}</div>
@@ -1100,22 +1103,43 @@ function selectTemplateFromCampaign(templateName, campaignId) {
     selectTemplate(templateName, camp?.template_params || null);
 }
 
+function handleTemplateKey(event, name) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectTemplate(name);
+    } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        event.target.nextElementSibling?.focus();
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        event.target.previousElementSibling?.focus();
+    }
+}
+
 function selectTemplate(name, prefill = null) {
     const template = cachedTemplates.find(t => t.name === name);
     if (!template) return;
 
     // Resaltar el ítem seleccionado
-    document.querySelectorAll('.tl-item').forEach(i => i.classList.remove('tl-selected'));
+    document.querySelectorAll('.tl-item').forEach(i => {
+        i.classList.remove('tl-selected');
+        i.setAttribute('aria-selected', 'false');
+    });
     const item = document.querySelector(`.tl-item[data-name="${CSS.escape(name)}"]`);
-    if (item) { item.classList.add('tl-selected'); item.scrollIntoView({ block: 'nearest' }); }
+    if (item) {
+        item.classList.add('tl-selected');
+        item.setAttribute('aria-selected', 'true');
+        item.scrollIntoView({ block: 'nearest' });
+    }
 
     // Actualizar inputs ocultos
     document.getElementById('f-template').value = template.name;
     document.getElementById('f-language').value  = template.language;
 
-    // Hint con idioma
-    document.getElementById('f-template-hint').textContent =
-        `Plantilla seleccionada: ${template.name}  ·  Idioma: ${template.language}`;
+    // Confirmación visible de la selección
+    const hint = document.getElementById('f-template-hint');
+    hint.textContent = `✓ Seleccionada: ${template.name}  ·  Idioma: ${template.language}`;
+    hint.style.color = 'var(--accent-green)';
 
     // Generar campos dinámicos (con valores pre-llenados si se pasa prefill)
     generateDynamicFields(template, prefill);
@@ -1257,11 +1281,16 @@ function closeCampaignModal() {
     document.getElementById('form-campaign').reset();
     document.getElementById('f-etiqueta-group').style.display = 'none';
     // Limpiar selección de plantilla y campos dinámicos
-    document.querySelectorAll('.tl-item').forEach(i => i.classList.remove('tl-selected'));
+    document.querySelectorAll('.tl-item').forEach(i => {
+        i.classList.remove('tl-selected');
+        i.setAttribute('aria-selected', 'false');
+    });
     const dynFields = document.getElementById('f-dynamic-fields');
     dynFields.innerHTML = '';
     dynFields.style.display = 'none';
-    document.getElementById('f-template-hint').textContent = 'Selecciona una plantilla de la lista';
+    const hint = document.getElementById('f-template-hint');
+    hint.textContent = 'Selecciona una plantilla de la lista';
+    hint.style.color = '';
 }
 async function updateContactPreview() {
     const source   = document.getElementById('f-source').value;

@@ -67,14 +67,37 @@ CREATE INDEX IF NOT EXISTS idx_cm_status   ON campaign_messages(campaign_id, sta
 ALTER PUBLICATION supabase_realtime ADD TABLE campaigns;
 ALTER PUBLICATION supabase_realtime ADD TABLE campaign_messages;
 
--- ─── Row Level Security (acceso total para esta app admin) ───
+-- ─── Row Level Security ───────────────────────────────────────
 ALTER TABLE contacts          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaigns         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_messages ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "allow_all" ON contacts          FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "allow_all" ON campaigns         FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "allow_all" ON campaign_messages FOR ALL USING (true) WITH CHECK (true);
+-- Cada usuario solo accede a sus propios contactos y campañas.
+-- Las funciones serverless usan el service_role key (bypassa RLS),
+-- por lo que estas políticas protegen el acceso directo con anon/user key.
+CREATE POLICY "own_contacts" ON contacts
+    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "own_campaigns" ON campaigns
+    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- campaign_messages hereda el aislamiento a través de la FK a campaigns
+CREATE POLICY "own_campaign_messages" ON campaign_messages
+    FOR ALL USING (
+        campaign_id IN (
+            SELECT id FROM campaigns WHERE user_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        campaign_id IN (
+            SELECT id FROM campaigns WHERE user_id = auth.uid()
+        )
+    );
+
+-- Migración: si ya existen las políticas "allow_all", eliminarlas primero:
+-- DROP POLICY IF EXISTS "allow_all" ON contacts;
+-- DROP POLICY IF EXISTS "allow_all" ON campaigns;
+-- DROP POLICY IF EXISTS "allow_all" ON campaign_messages;
 
 -- ─── Funciones RPC para contadores atómicos ────
 CREATE OR REPLACE FUNCTION increment_campaign_sent(campaign_id BIGINT)

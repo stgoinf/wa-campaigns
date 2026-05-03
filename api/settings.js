@@ -1,7 +1,7 @@
 // GET  /api/settings  → devuelve config actual del usuario (token enmascarado)
 // POST /api/settings  → guarda nuevas credenciales en Supabase app_settings
 
-const { adminClient } = require('./_lib/supabase');
+const { adminClient, dbError } = require('./_lib/supabase');
 const { getSettings }  = require('./_lib/getSettings');
 const { getUserId }    = require('./_lib/auth');
 
@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
             .from('app_settings')
             .upsert(newValues, { onConflict: 'user_id' });
 
-        if (error) return res.status(500).json({ error: error.message });
+        if (error) return dbError(res, error);
 
         return res.json({ ok: true });
     }

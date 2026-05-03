@@ -2,10 +2,8 @@
 // GET /api/admin?view=stats   → métricas globales de la plataforma
 // Solo accesible para el email de administrador
 
-const { adminClient } = require('./_lib/supabase');
+const { adminClient, dbError } = require('./_lib/supabase');
 const { getUserId }   = require('./_lib/auth');
-
-const ADMIN_EMAIL = 'santiago.infante@botcity.com.do';
 
 async function isAdmin(req) {
     const userId = await getUserId(req);
@@ -13,7 +11,9 @@ async function isAdmin(req) {
     const sb = adminClient();
     const { data: { user }, error } = await sb.auth.admin.getUserById(userId);
     if (error || !user) return null;
-    return user.email === ADMIN_EMAIL ? userId : null;
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) return null;
+    return user.email === adminEmail ? userId : null;
 }
 
 module.exports = async function handler(req, res) {
@@ -97,6 +97,6 @@ module.exports = async function handler(req, res) {
         res.status(400).json({ error: 'view no válido. Usa ?view=users o ?view=stats' });
 
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        dbError(res, err);
     }
 };

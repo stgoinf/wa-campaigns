@@ -1,7 +1,7 @@
 // GET  /api/campaigns       → lista todas (del usuario autenticado)
 // POST /api/campaigns       → crear nueva
 
-const { adminClient } = require('../_lib/supabase');
+const { adminClient, dbError } = require('../_lib/supabase');
 const { getUserId }   = require('../_lib/auth');
 
 module.exports = async function handler(req, res) {
@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
-        if (error) return res.status(500).json({ error: error.message });
+        if (error) return dbError(res, error);
         return res.json({ campaigns: data || [] });
     }
 
@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
                 .range(from, from + PAGE - 1);
             if (source === 'etiqueta' && etiqueta) query = query.contains('tags', [etiqueta]);
             const { data: page, error: cErr } = await query;
-            if (cErr) return res.status(500).json({ error: cErr.message });
+            if (cErr) return dbError(res, cErr);
             if (page && page.length) contacts = contacts.concat(page);
             if (!page || page.length < PAGE) break; // última página
             from += PAGE;
@@ -66,7 +66,7 @@ module.exports = async function handler(req, res) {
             .select()
             .single();
 
-        if (campErr) return res.status(500).json({ error: campErr.message });
+        if (campErr) return dbError(res, campErr);
 
         // Insertar mensajes en lotes de 2000
         const BATCH = 2000;
@@ -76,7 +76,7 @@ module.exports = async function handler(req, res) {
                 telefono:    c.telefono
             }));
             const { error: mErr } = await sb.from('campaign_messages').insert(batch);
-            if (mErr) return res.status(500).json({ error: mErr.message });
+            if (mErr) return dbError(res, mErr);
         }
 
         return res.status(201).json(camp);

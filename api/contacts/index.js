@@ -4,7 +4,7 @@
 // DELETE /api/contacts?id=123
 // PUT    /api/contacts          body: { ids:[1,2,3], etiqueta:"promo" }  → bulk tag
 
-const { adminClient } = require('../_lib/supabase');
+const { adminClient, dbError } = require('../_lib/supabase');
 const { getUserId }   = require('../_lib/auth');
 
 module.exports = async function handler(req, res) {
@@ -78,13 +78,13 @@ module.exports = async function handler(req, res) {
             }
 
             const { data, error, count } = await query;
-            if (error) return res.status(500).json({ error: error.message });
+            if (error) return dbError(res, error);
 
             const pages = Math.ceil((count || 0) / limit);
             return res.json({ contacts: data || [], total: count || 0, page, pages });
 
         } catch (err) {
-            return res.status(500).json({ error: err.message });
+            return dbError(res, err);
         }
     }
 
@@ -130,7 +130,7 @@ module.exports = async function handler(req, res) {
             }
             return res.json({ ok: true, updated: ids.length });
         } catch (err) {
-            return res.status(500).json({ error: err.message });
+            return dbError(res, err);
         }
     }
 
@@ -144,7 +144,7 @@ module.exports = async function handler(req, res) {
             if (error) return res.status(500).json({ error: error.message });
             return res.json({ ok: true });
         } catch (err) {
-            return res.status(500).json({ error: err.message });
+            return dbError(res, err);
         }
     }
 

@@ -3,10 +3,11 @@
 // Upsert aditivo — los contactos existentes se actualizan, no se borran.
 // Los campos last_sent_at y last_template se preservan al hacer upsert.
 
-const { adminClient } = require('../_lib/supabase');
+const { adminClient, dbError } = require('../_lib/supabase');
 const { getUserId }   = require('../_lib/auth');
 
-const BATCH_SIZE = 2000;
+const BATCH_SIZE  = 2000;
+const MAX_CONTACTS = 50_000;
 
 module.exports = async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
@@ -18,6 +19,9 @@ module.exports = async function handler(req, res) {
 
     if (!Array.isArray(contacts) || contacts.length === 0) {
         return res.status(400).json({ error: 'Se requiere un array de contactos' });
+    }
+    if (contacts.length > MAX_CONTACTS) {
+        return res.status(400).json({ error: `Máximo ${MAX_CONTACTS.toLocaleString()} contactos por solicitud` });
     }
 
     const sb = adminClient();
@@ -39,7 +43,7 @@ module.exports = async function handler(req, res) {
         const { error } = await sb
             .from('contacts')
             .upsert(batch, { onConflict: 'user_id,telefono', ignoreDuplicates: false });
-        if (error) return res.status(500).json({ error: error.message });
+        if (error) return dbError(res, error);
         inserted += batch.length;
     }
 

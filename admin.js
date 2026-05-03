@@ -3,18 +3,19 @@ const SUPABASE_URL      = 'https://lpliytimpwstaiydwfwk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__8vr69KZjUcdO13BlwgqVQ_1rm5b6OU';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const ADMIN_EMAIL = 'santiago.infante@botcity.com.do';
+const CAMPAIGN_STATUS_LABELS = {
+    running: 'En ejecución', completed: 'Completada',
+    paused: 'Pausada', failed: 'Fallida', draft: 'Borrador'
+};
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 async function checkAdminAuth() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { window.location.href = '/'; return; }
 
+    // La validación real de admin se hace server-side en /api/admin
+    // Aquí solo verificamos que haya sesión activa antes de cargar el panel
     const email = session.user.email;
-    if (email !== ADMIN_EMAIL) {
-        document.getElementById('access-denied').style.display = 'flex';
-        return;
-    }
 
     document.getElementById('admin-app').style.display = 'flex';
     document.getElementById('admin-user-info').textContent = email;
@@ -119,7 +120,7 @@ async function loadUsers() {
                             <div class="mini-camp">
                                 <span style="color:var(--text-secondary)">${new Date(c.created_at).toLocaleDateString('es', {day:'2-digit',month:'short',year:'numeric'})}</span>
                                 <span>${(c.enviados||0).toLocaleString()} enviados · ${(c.fallidos||0).toLocaleString()} fallidos</span>
-                                <span class="status-badge ${c.status}" style="font-size:0.72rem">${c.status}</span>
+                                <span class="status-badge ${c.status}" style="font-size:0.72rem">${CAMPAIGN_STATUS_LABELS[c.status] || c.status}</span>
                             </div>`).join('')}
                         </div>
                     </div>

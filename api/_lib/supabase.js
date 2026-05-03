@@ -9,4 +9,11 @@ function adminClient() {
     );
 }
 
-module.exports = { adminClient };
+// Evita filtrar detalles internos de Supabase al cliente.
+// Loguea el error real en el servidor para depuración.
+function dbError(res, error, fallback = 'Error interno del servidor') {
+    console.error('[db]', error?.message || error);
+    return res.status(500).json({ error: fallback });
+}
+
+module.exports = { adminClient, dbError };
