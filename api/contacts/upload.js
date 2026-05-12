@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
         const { error } = await sb
             .from('contacts')
             .upsert(batch, { onConflict: 'workspace_id,telefono', ignoreDuplicates: false });
-        if (error) return dbError(res, error);
+        if (error) return res.status(500).json({ error: error.message || error.details || JSON.stringify(error) });
         inserted += batch.length;
     }
 
