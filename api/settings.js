@@ -1,9 +1,9 @@
-// GET  /api/settings  → devuelve config actual del usuario (token enmascarado)
+// GET  /api/settings  → devuelve config actual del workspace (token enmascarado)
 // POST /api/settings  → guarda nuevas credenciales en Supabase app_settings
 
 const { adminClient, dbError } = require('./_lib/supabase');
 const { getSettings }  = require('./_lib/getSettings');
-const { getUserId }    = require('./_lib/auth');
+const { getUserId, getWorkspaceId } = require('./_lib/auth');
 
 function maskToken(token) {
     if (!token) return null;
@@ -15,9 +15,12 @@ module.exports = async function handler(req, res) {
     const userId = await getUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
+    const workspaceId = await getWorkspaceId(req, userId);
+    if (!workspaceId) return res.status(400).json({ error: 'Workspace no especificado o inválido.' });
+
     // ── GET ──────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-        const settings = await getSettings(userId);
+        const settings = await getSettings(workspaceId);
         return res.json({
             wa_access_token:            maskToken(settings.wa_access_token),
             wa_phone_number_id:         settings.wa_phone_number_id         || '',
@@ -35,12 +38,11 @@ module.exports = async function handler(req, res) {
         }
 
         const sb = adminClient();
-
-        // Leer valores actuales del usuario para no borrar lo que no se envió
-        const current = await getSettings(userId);
+        const current = await getSettings(workspaceId);
 
         const newValues = {
             user_id:                userId,
+            workspace_id:           workspaceId,
             wa_access_token:        wa_access_token        || current.wa_access_token        || null,
             wa_phone_number_id:     wa_phone_number_id     || current.wa_phone_number_id     || null,
             wa_business_account_id: wa_business_account_id || current.wa_business_account_id || null,
@@ -49,10 +51,9 @@ module.exports = async function handler(req, res) {
 
         const { error } = await sb
             .from('app_settings')
-            .upsert(newValues, { onConflict: 'user_id' });
+            .upsert(newValues, { onConflict: 'workspace_id' });
 
         if (error) return dbError(res, error);
-
         return res.json({ ok: true });
     }
 

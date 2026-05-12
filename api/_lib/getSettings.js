@@ -1,11 +1,10 @@
 // Helper: obtiene las credenciales de WhatsApp desde Supabase (tabla app_settings)
-// Acepta userId para multi-tenant: cada cliente tiene sus propias credenciales.
+// Acepta workspaceId para multi-workspace: cada workspace tiene sus propias credenciales.
 // Fallback a variables de entorno para desarrollo local.
 
 const { adminClient } = require('./supabase');
 
-async function getSettings(userId = null) {
-    // Fallback a env vars si están configuradas (desarrollo local / Vercel dashboard)
+async function getSettings(workspaceId = null) {
     const fromEnv = {
         wa_access_token:        process.env.WA_ACCESS_TOKEN        || null,
         wa_phone_number_id:     process.env.WA_PHONE_NUMBER_ID     || null,
@@ -16,11 +15,9 @@ async function getSettings(userId = null) {
         const sb = adminClient();
         let query = sb.from('app_settings').select('*');
 
-        if (userId) {
-            // Multi-tenant: buscar credenciales del cliente autenticado
-            query = query.eq('user_id', userId).single();
+        if (workspaceId) {
+            query = query.eq('workspace_id', workspaceId).single();
         } else {
-            // Fallback legacy: fila con id=1 (webhook sin contexto de usuario)
             query = query.eq('id', 1).single();
         }
 

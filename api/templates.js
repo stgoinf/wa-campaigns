@@ -1,9 +1,9 @@
 // GET /api/templates
-// Devuelve las plantillas APPROVED desde la cuenta de Meta/WhatsApp Business del usuario
+// Devuelve las plantillas APPROVED desde la cuenta de Meta/WhatsApp Business del workspace
 
 const GRAPH_URL       = 'https://graph.facebook.com/v19.0';
 const { getSettings } = require('./_lib/getSettings');
-const { getUserId }   = require('./_lib/auth');
+const { getUserId, getWorkspaceId } = require('./_lib/auth');
 
 module.exports = async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).end();
@@ -11,7 +11,10 @@ module.exports = async function handler(req, res) {
     const userId = await getUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
-    const settings = await getSettings(userId);
+    const workspaceId = await getWorkspaceId(req, userId);
+    if (!workspaceId) return res.status(400).json({ error: 'Workspace no especificado o inválido.' });
+
+    const settings = await getSettings(workspaceId);
     const token    = settings.wa_access_token;
     const wabaId   = settings.wa_business_account_id;
 

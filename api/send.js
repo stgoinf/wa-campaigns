@@ -1,18 +1,19 @@
 // POST /api/send
 // Body: { campaignId, messageId, telefono, templateName?, templateLanguage?, templateParams? }
 // Envía UN mensaje via WhatsApp API y actualiza Supabase.
-// Si se pasan templateName/Language/Params se omite la consulta de campaña (más rápido).
-// El frontend lo llama en lotes paralelos de N mensajes.
 
 const { adminClient } = require('./_lib/supabase');
 const { sendTemplate } = require('./_lib/whatsapp');
-const { getUserId }    = require('./_lib/auth');
+const { getUserId, getWorkspaceId } = require('./_lib/auth');
 
 module.exports = async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
 
     const userId = await getUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
+    const workspaceId = await getWorkspaceId(req, userId);
+    if (!workspaceId) return res.status(400).json({ error: 'Workspace no especificado o inválido.' });
 
     const { campaignId, messageId, telefono,
             templateName, templateLanguage, templateParams } = req.body;
@@ -22,29 +23,25 @@ module.exports = async function handler(req, res) {
 
     const sb = adminClient();
 
-    // Siempre validar la campaña contra el usuario — evita que templateName del
-    // frontend se use con una campaña ajena o en estado incorrecto.
     const { data: camp, error: cErr } = await sb
         .from('campaigns')
         .select('template_name, template_language, template_params, status')
         .eq('id', campaignId)
-        .eq('user_id', userId)
+        .eq('workspace_id', workspaceId)
         .single();
     if (cErr || !camp) return res.status(404).json({ error: 'Campaña no encontrada' });
     if (camp.status !== 'running') return res.status(400).json({ error: 'Campaña no está en ejecución' });
 
-    // Si el frontend envía los datos de plantilla, deben coincidir con los de la campaña
     const tmplName   = camp.template_name;
     const tmplLang   = camp.template_language;
     const tmplParams = templateParams && camp.template_params
-        ? templateParams   // parámetros variables (body vars) pueden venir del frontend
+        ? templateParams
         : camp.template_params || [];
 
     try {
-        const waId = await sendTemplate(telefono, tmplName, tmplLang, tmplParams, userId);
+        const waId = await sendTemplate(telefono, tmplName, tmplLang, tmplParams, workspaceId);
         const now  = new Date().toISOString();
 
-        // Actualizar mensaje e incrementar contador en paralelo
         await Promise.all([
             sb.from('campaign_messages')
               .update({ status: 'sent', wa_message_id: waId, sent_at: now })
@@ -53,17 +50,15 @@ module.exports = async function handler(req, res) {
             sb.rpc('increment_campaign_sent', { campaign_id: campaignId }),
         ]);
 
-        // Contacto — best-effort, sin bloquear la respuesta
         sb.from('contacts')
           .update({ last_sent_at: now, last_template: tmplName })
           .eq('telefono', telefono)
-          .eq('user_id', userId)
+          .eq('workspace_id', workspaceId)
           .then(() => {}).catch(() => {});
 
         res.json({ success: true, waMessageId: waId });
 
     } catch (err) {
-        // Rate limit de Meta — no marcar como fallido, el frontend reintentará
         const isRateLimit = err.code === 130429 || err.httpStatus === 429;
         if (isRateLimit) {
             return res.json({ success: false, rateLimited: true, error: err.message });

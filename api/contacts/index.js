@@ -5,41 +5,41 @@
 // PUT    /api/contacts          body: { ids:[1,2,3], etiqueta:"promo" }  → bulk tag
 
 const { adminClient, dbError } = require('../_lib/supabase');
-const { getUserId }   = require('../_lib/auth');
+const { getUserId, getWorkspaceId } = require('../_lib/auth');
 
 module.exports = async function handler(req, res) {
     const userId = await getUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
+    const workspaceId = await getWorkspaceId(req, userId);
+    if (!workspaceId) return res.status(400).json({ error: 'Workspace no especificado o inválido.' });
+
     const sb = adminClient();
 
     // ── GET ──────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-        // count-only (opcionalmente filtrado por etiqueta)
         if (req.query.count === 'true') {
             const etiquetaFilter = (req.query.etiqueta || '').trim();
-            let q = sb.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId);
+            let q = sb.from('contacts').select('*', { count: 'exact', head: true }).eq('workspace_id', workspaceId);
             if (etiquetaFilter) q = q.contains('tags', [etiquetaFilter]);
             const { count, error } = await q;
             if (error) return res.status(500).json({ error: error.message });
             return res.json({ count: count || 0 });
         }
 
-        // stats: total, con_envio, sin_envio
         if (req.query.stats === 'true') {
             const [
                 { count: total },
                 { count: sent }
             ] = await Promise.all([
-                sb.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId),
-                sb.from('contacts').select('*', { count: 'exact', head: true }).eq('user_id', userId).not('last_sent_at', 'is', null),
+                sb.from('contacts').select('*', { count: 'exact', head: true }).eq('workspace_id', workspaceId),
+                sb.from('contacts').select('*', { count: 'exact', head: true }).eq('workspace_id', workspaceId).not('last_sent_at', 'is', null),
             ]);
             return res.json({ total: total || 0, sent: sent || 0, never: (total || 0) - (sent || 0) });
         }
 
-        // all unique tags with contact counts (scoped to this user)
         if (req.query.etiquetas === 'true') {
-            const { data, error } = await sb.rpc('get_all_tags_with_counts', { p_user_id: userId });
+            const { data, error } = await sb.rpc('get_all_tags_with_counts', { p_workspace_id: workspaceId });
             if (error) return res.status(500).json({ error: error.message });
             return res.json({ etiquetas: data || [] });
         }
@@ -58,7 +58,7 @@ module.exports = async function handler(req, res) {
             let query = sb
                 .from('contacts')
                 .select('id, telefono, nombre, etiqueta, tags, created_at, last_sent_at, last_template', { count: 'exact' })
-                .eq('user_id', userId)
+                .eq('workspace_id', workspaceId)
                 .order('last_sent_at', { ascending: false, nullsFirst: false })
                 .order('created_at',   { ascending: false })
                 .range(from, to);
@@ -105,27 +105,27 @@ module.exports = async function handler(req, res) {
                     .from('contacts')
                     .update({ etiqueta: tag || null, tags: newTags })
                     .in('id', ids)
-                    .eq('user_id', userId);
+                    .eq('workspace_id', workspaceId);
                 if (error) return res.status(500).json({ error: error.message });
             } else if (mode === 'add') {
                 for (const id of ids) {
                     const { data: row } = await sb.from('contacts').select('tags, etiqueta')
-                        .eq('id', id).eq('user_id', userId).single();
+                        .eq('id', id).eq('workspace_id', workspaceId).single();
                     const current = row?.tags || [];
                     if (!current.includes(tag)) {
                         const newTags = [...current, tag];
                         await sb.from('contacts').update({ tags: newTags, etiqueta: newTags[0] || null })
-                            .eq('id', id).eq('user_id', userId);
+                            .eq('id', id).eq('workspace_id', workspaceId);
                     }
                 }
             } else if (mode === 'remove') {
                 for (const id of ids) {
                     const { data: row } = await sb.from('contacts').select('tags, etiqueta')
-                        .eq('id', id).eq('user_id', userId).single();
+                        .eq('id', id).eq('workspace_id', workspaceId).single();
                     const current = row?.tags || [];
                     const newTags = current.filter(t => t !== tag);
                     await sb.from('contacts').update({ tags: newTags, etiqueta: newTags[0] || null })
-                        .eq('id', id).eq('user_id', userId);
+                        .eq('id', id).eq('workspace_id', workspaceId);
                 }
             }
             return res.json({ ok: true, updated: ids.length });
@@ -140,7 +140,7 @@ module.exports = async function handler(req, res) {
         if (!id) return res.status(400).json({ error: 'Falta el parámetro id.' });
         try {
             const { error } = await sb.from('contacts').delete()
-                .eq('id', id).eq('user_id', userId);
+                .eq('id', id).eq('workspace_id', workspaceId);
             if (error) return res.status(500).json({ error: error.message });
             return res.json({ ok: true });
         } catch (err) {

@@ -100,6 +100,22 @@
             <img src="logo_pidebot_white.png" alt="Pidebot" class="brand-logo">
         </div>
 
+        <!-- Selector de workspace/cuenta -->
+        <div class="workspace-switcher" id="workspace-switcher">
+            <button class="workspace-btn" id="workspace-toggle" title="Cambiar cuenta">
+                <i class="ph ph-buildings"></i>
+                <span id="workspace-name" class="workspace-name-text">Cargando...</span>
+                <i class="ph ph-caret-up-down workspace-caret"></i>
+            </button>
+            <div class="workspace-dropdown" id="workspace-dropdown" style="display:none">
+                <div id="workspace-list" class="workspace-list"></div>
+                <div class="workspace-dropdown-divider"></div>
+                <button id="btn-new-workspace" class="workspace-new-btn">
+                    <i class="ph ph-plus"></i> Nueva cuenta
+                </button>
+            </div>
+        </div>
+
         <!-- Navegación principal -->
         <nav class="sidebar-nav">
             <a class="nav-item active" data-tab="campaigns">

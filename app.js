@@ -11,7 +11,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 async function checkAuth() {
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
-        showApp(session.user);
+        await showApp(session.user);
     } else {
         showLogin();
     }
@@ -41,13 +41,14 @@ function showLoginForm() {
 
 const ADMIN_EMAIL = 'santiago.infante@botcity.com.do';
 
-function showApp(user) {
+async function showApp(user) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     document.getElementById('user-email').textContent = user.email;
     if (user.email === ADMIN_EMAIL) {
         document.getElementById('admin-link').style.display = 'flex';
     }
+    await initWorkspaces();
 }
 
 function setupAuth() {
@@ -73,7 +74,7 @@ function setupAuth() {
             return;
         }
 
-        showApp(data.user);
+        await showApp(data.user);
         init();
     });
 
@@ -134,8 +135,11 @@ function setupAuth() {
     document.getElementById('btn-logout').addEventListener('click', async () => {
         await sb.auth.signOut();
         if (realtimeChannel) realtimeChannel.unsubscribe();
-        campaignRunning = false;
-        globalData      = [];
+        campaignRunning    = false;
+        globalData         = [];
+        currentWorkspaceId = null;
+        workspaceList      = [];
+        localStorage.removeItem(WS_STORAGE_KEY);
         showLogin();
     });
 
@@ -146,16 +150,138 @@ function setupAuth() {
 }
 
 // ─────────────────────────────────────────────
-// Helper: fetch autenticado (incluye JWT en header)
+// Workspaces
+// ─────────────────────────────────────────────
+const WS_STORAGE_KEY = 'pidebot_workspace_id';
+let currentWorkspaceId   = null;
+let workspaceList        = [];
+
+function getCurrentWorkspaceId() { return currentWorkspaceId; }
+
+function setCurrentWorkspace(id, name) {
+    currentWorkspaceId = id;
+    localStorage.setItem(WS_STORAGE_KEY, id);
+    document.getElementById('workspace-name').textContent = name;
+}
+
+async function loadWorkspaces() {
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token;
+    const res   = await fetch('/api/workspaces', {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    workspaceList = data.workspaces || [];
+    return workspaceList;
+}
+
+async function initWorkspaces() {
+    const list = await loadWorkspaces();
+
+    if (!list.length) {
+        // No hay workspaces — pedir nombre y crear uno
+        const name = prompt('Crea tu primera cuenta. ¿Cómo quieres llamarla?', 'Mi cuenta');
+        if (!name) return;
+        const { data: { session } } = await sb.auth.getSession();
+        const res = await fetch('/api/workspaces', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const ws = await res.json();
+        workspaceList = [ws];
+        setCurrentWorkspace(ws.id, ws.name);
+    } else {
+        const saved = localStorage.getItem(WS_STORAGE_KEY);
+        const match = list.find(w => w.id === saved) || list[0];
+        setCurrentWorkspace(match.id, match.name);
+    }
+
+    renderWorkspaceList();
+    setupWorkspaceSwitcher();
+}
+
+function renderWorkspaceList() {
+    const container = document.getElementById('workspace-list');
+    container.innerHTML = workspaceList.map(w => `
+        <button class="workspace-option ${w.id === currentWorkspaceId ? 'active' : ''}"
+                data-id="${w.id}" data-name="${escHtml(w.name)}">
+            <i class="ph ph-${w.id === currentWorkspaceId ? 'check-circle' : 'circle'}"></i>
+            ${escHtml(w.name)}
+        </button>
+    `).join('');
+
+    container.querySelectorAll('.workspace-option').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const { id, name } = btn.dataset;
+            if (id === currentWorkspaceId) { closeWorkspaceDropdown(); return; }
+            setCurrentWorkspace(id, name);
+            renderWorkspaceList();
+            closeWorkspaceDropdown();
+            // Recargar datos del nuevo workspace
+            loadCampaigns();
+            if (document.getElementById('tab-contacts').classList.contains('active')) {
+                loadContacts(); loadTagsFilter();
+            }
+            if (document.getElementById('tab-config').classList.contains('active')) {
+                loadConfig();
+            }
+        });
+    });
+}
+
+function closeWorkspaceDropdown() {
+    document.getElementById('workspace-dropdown').style.display = 'none';
+}
+
+function setupWorkspaceSwitcher() {
+    const toggle   = document.getElementById('workspace-toggle');
+    const dropdown = document.getElementById('workspace-dropdown');
+
+    toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = dropdown.style.display === 'block';
+        dropdown.style.display = isOpen ? 'none' : 'block';
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!document.getElementById('workspace-switcher').contains(e.target)) {
+            closeWorkspaceDropdown();
+        }
+    });
+
+    document.getElementById('btn-new-workspace').addEventListener('click', async () => {
+        closeWorkspaceDropdown();
+        const name = prompt('Nombre para la nueva cuenta:');
+        if (!name?.trim()) return;
+        const { data: { session } } = await sb.auth.getSession();
+        const res = await fetch('/api/workspaces', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name.trim() })
+        });
+        if (!res.ok) { alert('Error al crear la cuenta.'); return; }
+        const ws = await res.json();
+        workspaceList.push(ws);
+        setCurrentWorkspace(ws.id, ws.name);
+        renderWorkspaceList();
+        loadCampaigns();
+    });
+}
+
+// ─────────────────────────────────────────────
+// Helper: fetch autenticado (incluye JWT + workspace en headers)
 // ─────────────────────────────────────────────
 async function authFetch(url, options = {}) {
     const { data: { session } } = await sb.auth.getSession();
     const token = session?.access_token;
+    const wsId  = getCurrentWorkspaceId();
     return fetch(url, {
         ...options,
         headers: {
             ...(options.headers || {}),
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(wsId  ? { 'x-workspace-id': wsId } : {})
         }
     });
 }
