@@ -1,10 +1,9 @@
 // POST /api/contacts/upload
 // Body: { contacts: [{ telefono, nombre?, etiqueta? }] }
 // Upsert aditivo — los contactos existentes se actualizan, no se borran.
-// Los campos last_sent_at y last_template se preservan al hacer upsert.
 
 const { adminClient, dbError } = require('../_lib/supabase');
-const { getUserId }   = require('../_lib/auth');
+const { getUserId, getWorkspaceId } = require('../_lib/auth');
 
 const BATCH_SIZE  = 2000;
 const MAX_CONTACTS = 50_000;
@@ -14,6 +13,9 @@ module.exports = async function handler(req, res) {
 
     const userId = await getUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
+    const workspaceId = await getWorkspaceId(req, userId);
+    if (!workspaceId) return res.status(400).json({ error: 'Workspace no especificado o inválido.' });
 
     const { contacts } = req.body;
 
@@ -31,24 +33,24 @@ module.exports = async function handler(req, res) {
         const batch = contacts.slice(i, i + BATCH_SIZE).map(c => {
             const etiqueta = c.etiqueta || null;
             return {
-                telefono: String(c.telefono).replace(/\D/g, ''),
-                nombre:   c.nombre || null,
+                telefono:     String(c.telefono).replace(/\D/g, ''),
+                nombre:       c.nombre || null,
                 etiqueta,
-                tags:     etiqueta ? [etiqueta] : [],
-                user_id:  userId
+                tags:         etiqueta ? [etiqueta] : [],
+                user_id:      userId,
+                workspace_id: workspaceId,
             };
         }).filter(c => c.telefono.length >= 8);
 
-        // Upsert por (user_id, telefono) — cada cliente tiene sus propios contactos
         const { error } = await sb
             .from('contacts')
-            .upsert(batch, { onConflict: 'user_id,telefono', ignoreDuplicates: false });
+            .upsert(batch, { onConflict: 'workspace_id,telefono', ignoreDuplicates: false });
         if (error) return dbError(res, error);
         inserted += batch.length;
     }
 
     const { count } = await sb.from('contacts')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
+        .eq('workspace_id', workspaceId);
     res.json({ success: true, total: count, inserted });
 };
