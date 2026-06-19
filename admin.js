@@ -166,5 +166,30 @@ function escHtml(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ─── Tema ─────────────────────────────────────────────────────────────────────
+function applyAdminTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+        icon.classList.remove('ph-sun', 'ph-moon');
+        icon.classList.add(theme === 'dark' ? 'ph-sun' : 'ph-moon');
+    }
+    document.querySelectorAll('img[data-logo-light]').forEach(img => {
+        const src = theme === 'dark' ? img.dataset.logoDark : img.dataset.logoLight;
+        if (src && img.getAttribute('src') !== src) img.setAttribute('src', src);
+    });
+}
+function initAdminTheme() {
+    const stored = (() => { try { return localStorage.getItem('theme'); } catch { return null; } })();
+    const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    applyAdminTheme(stored || (prefersDark ? 'dark' : 'light'));
+    document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        applyAdminTheme(next);
+        try { localStorage.setItem('theme', next); } catch {}
+    });
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
+initAdminTheme();
 checkAdminAuth();
