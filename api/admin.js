@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
 
     const sb = adminClient();
 
-    if (req.method === 'POST') return handleAction(req, res, sb);
+    if (req.method === 'POST') return handleAction(req, res, sb, adminId);
 
     const view = req.query.view || 'users';
 
@@ -133,7 +133,7 @@ module.exports = async function handler(req, res) {
     }
 };
 
-async function handleAction(req, res, sb) {
+async function handleAction(req, res, sb, adminId) {
     const action = req.query.action;
 
     if (action === 'create-user') {
@@ -223,5 +223,51 @@ async function handleAction(req, res, sb) {
         });
     }
 
-    return res.status(400).json({ error: 'action no soportada. Usa ?action=create-user.' });
+    if (action === 'reset-password') {
+        const { userId, password } = req.body || {};
+        if (!userId)                          return res.status(400).json({ error: 'Falta userId.' });
+        if (!password || password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+
+        const { error } = await sb.auth.admin.updateUserById(userId, { password });
+        if (error) return dbError(res, error, 'No se pudo actualizar la contraseña.');
+        return res.json({ ok: true });
+    }
+
+    if (action === 'confirm-email') {
+        const { userId } = req.body || {};
+        if (!userId) return res.status(400).json({ error: 'Falta userId.' });
+
+        const { data, error } = await sb.auth.admin.updateUserById(userId, {
+            email_confirm: true,
+        });
+        if (error) return dbError(res, error, 'No se pudo confirmar el email.');
+        return res.json({ ok: true, confirmed_at: data?.user?.email_confirmed_at || null });
+    }
+
+    if (action === 'delete-user') {
+        const { userId, confirmEmail } = req.body || {};
+        if (!userId)        return res.status(400).json({ error: 'Falta userId.' });
+        if (!confirmEmail)  return res.status(400).json({ error: 'Confirma el email del usuario que vas a eliminar.' });
+
+        if (userId === adminId) {
+            return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta de admin desde aquí.' });
+        }
+
+        // Verifica que el email confirmado por el admin coincide con el del usuario,
+        // como salvaguarda contra clicks accidentales.
+        const { data: target, error: gErr } = await sb.auth.admin.getUserById(userId);
+        if (gErr || !target?.user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+        if (target.user.email !== confirmEmail) {
+            return res.status(400).json({ error: 'El email de confirmación no coincide.' });
+        }
+
+        const { error } = await sb.auth.admin.deleteUser(userId);
+        if (error) return dbError(res, error, 'No se pudo eliminar el usuario.');
+        // ON DELETE CASCADE en workspaces.user_id y workspace_members.user_id se
+        // encarga del resto. Los workspaces donde era único owner desaparecen
+        // junto con sus contacts/campaigns (cascade desde workspaces.id).
+        return res.json({ ok: true });
+    }
+
+    return res.status(400).json({ error: 'action no soportada. Usa ?action=create-user|reset-password|confirm-email|delete-user.' });
 }
