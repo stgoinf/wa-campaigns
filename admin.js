@@ -3,6 +3,10 @@ const SUPABASE_URL      = 'https://lpliytimpwstaiydwfwk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__8vr69KZjUcdO13BlwgqVQ_1rm5b6OU';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Mismo valor que en app.js — solo para pintar la badge "ADMIN" en la lista.
+// La autorización real vive en api/admin.js (process.env.ADMIN_EMAIL).
+const ADMIN_EMAIL = 'santiago.infante@botcity.com.do';
+
 const CAMPAIGN_STATUS_LABELS = {
     running: 'En ejecución', completed: 'Completada',
     paused: 'Pausada', failed: 'Fallida', draft: 'Borrador'
