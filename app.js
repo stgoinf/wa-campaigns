@@ -2166,7 +2166,56 @@ function escHtml(str) {
                       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// ─────────────────────────────────────────────
+// Tema (light / dark)
+// ─────────────────────────────────────────────
+function getStoredTheme() {
+    try { return localStorage.getItem('theme'); } catch { return null; }
+}
+function setStoredTheme(theme) {
+    try { localStorage.setItem('theme', theme); } catch {}
+}
+function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+        icon.classList.remove('ph-sun', 'ph-moon');
+        icon.classList.add(theme === 'dark' ? 'ph-sun' : 'ph-moon');
+    }
+    document.querySelectorAll('img[data-logo-light]').forEach(img => {
+        const src = theme === 'dark' ? img.dataset.logoDark : img.dataset.logoLight;
+        if (src && img.getAttribute('src') !== src) img.setAttribute('src', src);
+    });
+}
+function initTheme() {
+    const stored = getStoredTheme();
+    const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    applyTheme(stored || (prefersDark ? 'dark' : 'light'));
+    document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        setStoredTheme(next);
+    });
+}
+
+// Helper para Chart.js — devuelve colores reactivos al tema.
+// Lo consume PR 6 (módulo de métricas).
+function getThemeChartColors() {
+    const root = getComputedStyle(document.documentElement);
+    const v = (n) => root.getPropertyValue(n).trim();
+    return {
+        text:        v('--text-primary')   || '#0e2127',
+        muted:       v('--text-secondary') || '#5d747a',
+        grid:        v('--border-soft')    || 'rgba(0,57,66,0.08)',
+        sent:        v('--color-sent'),
+        delivered:   v('--color-delivered'),
+        read:        v('--color-read'),
+        failed:      v('--color-failed'),
+    };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+    initTheme();
     setupAuth();
     await checkAuth();
     // init() se llama solo si ya hay sesión activa
