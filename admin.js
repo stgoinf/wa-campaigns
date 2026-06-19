@@ -22,11 +22,12 @@ async function checkAdminAuth() {
     initAdmin(session);
 }
 
-async function authFetch(url) {
+async function authFetch(url, opts = {}) {
     const { data: { session } } = await sb.auth.getSession();
-    return fetch(url, {
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
-    });
+    const headers = { ...(opts.headers || {}) };
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+    if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    return fetch(url, { ...opts, headers });
 }
 
 // ─── Navegación ───────────────────────────────────────────────────────────────
@@ -45,7 +46,190 @@ function initAdmin(session) {
 
     document.getElementById('btn-refresh-users').addEventListener('click', loadUsers);
 
+    initCreateUserModal();
+
     loadUsers();
+}
+
+// ─── Modal: Crear cliente ────────────────────────────────────────────────────
+function initCreateUserModal() {
+    const modal   = document.getElementById('modal-create-user');
+    const form    = document.getElementById('form-create-user');
+    const success = document.getElementById('cu-success');
+    const errorEl = document.getElementById('cu-error');
+    const submit  = document.getElementById('cu-submit');
+
+    document.getElementById('btn-new-user').addEventListener('click', () => openCreateUserModal());
+
+    modal.querySelectorAll('[data-close-modal]').forEach(el => {
+        el.addEventListener('click', () => closeCreateUserModal({ reloadUsers: success.style.display === 'block' }));
+    });
+
+    // Toggle entre crear nuevo workspace y asignar existente
+    document.querySelectorAll('input[name="cu-mode"]').forEach(r => {
+        r.addEventListener('change', () => {
+            const isNew = r.value === 'new' && r.checked;
+            if (!r.checked) return;
+            document.getElementById('cu-mode-new').style.display      = isNew ? 'block' : 'none';
+            document.getElementById('cu-mode-existing').style.display = isNew ? 'none'  : 'block';
+            if (!isNew) loadWorkspaceOptions();
+        });
+    });
+
+    document.getElementById('cu-pw-toggle').addEventListener('click', () => {
+        const inp  = document.getElementById('cu-password');
+        const icon = document.querySelector('#cu-pw-toggle i');
+        const visible = inp.type === 'text';
+        inp.type = visible ? 'password' : 'text';
+        icon.className = visible ? 'ph ph-eye' : 'ph ph-eye-slash';
+    });
+
+    document.getElementById('cu-gen-pw').addEventListener('click', () => {
+        const inp = document.getElementById('cu-password');
+        inp.value = generatePassword();
+        inp.type  = 'text';
+        document.querySelector('#cu-pw-toggle i').className = 'ph ph-eye-slash';
+    });
+
+    modal.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = document.getElementById(btn.dataset.copy);
+            if (!target) return;
+            navigator.clipboard?.writeText(target.textContent).then(() => {
+                const i = btn.querySelector('i');
+                const prev = i.className;
+                i.className = 'ph ph-check';
+                setTimeout(() => { i.className = prev; }, 1400);
+            }).catch(() => {});
+        });
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.style.display = 'none';
+        const email    = document.getElementById('cu-email').value.trim();
+        const password = document.getElementById('cu-password').value;
+        const mode     = document.querySelector('input[name="cu-mode"]:checked')?.value || 'new';
+
+        if (!email || !password) {
+            errorEl.textContent = 'Completa email y contraseña.';
+            errorEl.style.display = 'block';
+            return;
+        }
+        if (password.length < 8) {
+            errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        const body = { email, password };
+        if (mode === 'new') {
+            const workspaceName = document.getElementById('cu-workspace').value.trim();
+            if (!workspaceName) {
+                errorEl.textContent = 'Ingresa el nombre del workspace nuevo.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            body.workspaceName = workspaceName;
+        } else {
+            const workspaceId = document.getElementById('cu-workspace-id').value;
+            if (!workspaceId) {
+                errorEl.textContent = 'Elige el workspace al que asignar este cliente.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            body.workspaceId = workspaceId;
+        }
+
+        submit.disabled = true;
+        const prevHtml = submit.innerHTML;
+        submit.innerHTML = '<i class="ph ph-circle-notch spin"></i> Creando...';
+
+        try {
+            const res = await authFetch('/api/admin?action=create-user', {
+                method: 'POST',
+                body:   JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'No se pudo crear el cliente.');
+
+            document.getElementById('cu-out-email').textContent = data.email;
+            document.getElementById('cu-out-pw').textContent    = password;
+            const wsLabel = data.assigned
+                ? `${data.workspaceName} · asignado como miembro`
+                : `${data.workspaceName} · creado y asignado como dueño`;
+            document.getElementById('cu-out-ws').textContent = wsLabel;
+            form.style.display    = 'none';
+            success.style.display = 'block';
+        } catch (err) {
+            errorEl.textContent   = err.message;
+            errorEl.style.display = 'block';
+        } finally {
+            submit.disabled  = false;
+            submit.innerHTML = prevHtml;
+        }
+    });
+}
+
+// Carga la lista de workspaces en el dropdown del modal (solo cuando se
+// escoge "Asignar existente"). Se cachea por sesión del modal.
+let workspaceOptionsCache = null;
+async function loadWorkspaceOptions() {
+    const select = document.getElementById('cu-workspace-id');
+    if (workspaceOptionsCache) {
+        renderWorkspaceOptions(select, workspaceOptionsCache);
+        return;
+    }
+    select.innerHTML = '<option value="">Cargando workspaces…</option>';
+    try {
+        const res = await authFetch('/api/admin?view=workspaces');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar la lista.');
+        workspaceOptionsCache = data.workspaces || [];
+        renderWorkspaceOptions(select, workspaceOptionsCache);
+    } catch (err) {
+        select.innerHTML = `<option value="">Error: ${escHtml(err.message)}</option>`;
+    }
+}
+function renderWorkspaceOptions(select, workspaces) {
+    if (!workspaces.length) {
+        select.innerHTML = '<option value="">No hay workspaces todavía</option>';
+        return;
+    }
+    select.innerHTML = '<option value="">Selecciona un workspace…</option>' +
+        workspaces.map(w => {
+            const meta = [w.owner_email, `${w.member_count} miembro${w.member_count === 1 ? '' : 's'}`]
+                .filter(Boolean).join(' · ');
+            return `<option value="${escHtml(w.id)}">${escHtml(w.name)} — ${escHtml(meta)}</option>`;
+        }).join('');
+}
+
+function openCreateUserModal() {
+    const modal   = document.getElementById('modal-create-user');
+    const form    = document.getElementById('form-create-user');
+    const success = document.getElementById('cu-success');
+    form.reset();
+    form.style.display    = 'block';
+    success.style.display = 'none';
+    document.getElementById('cu-error').style.display = 'none';
+    document.getElementById('cu-password').type = 'password';
+    document.querySelector('#cu-pw-toggle i').className = 'ph ph-eye';
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('cu-email').focus(), 50);
+}
+
+function closeCreateUserModal({ reloadUsers } = {}) {
+    document.getElementById('modal-create-user').style.display = 'none';
+    if (reloadUsers) loadUsers();
+}
+
+function generatePassword(len = 12) {
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const buf   = new Uint8Array(len);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    let out = '';
+    for (let i = 0; i < len; i++) out += chars[buf[i] % chars.length];
+    return out;
 }
 
 // ─── Cargar lista de usuarios ─────────────────────────────────────────────────

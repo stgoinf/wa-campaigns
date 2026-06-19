@@ -14,14 +14,18 @@ async function getUserId(req) {
     }
 }
 
-// Valida que el workspace_id enviado en x-workspace-id pertenece al usuario autenticado.
+// Valida que el usuario autenticado es miembro del workspace enviado en
+// x-workspace-id. Usa workspace_members (multi-usuario por workspace).
 async function getWorkspaceId(req, userId) {
     const wsId = (req.headers['x-workspace-id'] || '').trim();
     if (!wsId || !userId) return null;
     const sb = adminClient();
-    const { data } = await sb.from('workspaces')
-        .select('id').eq('id', wsId).eq('user_id', userId).single();
-    return data?.id || null;
+    const { data } = await sb.from('workspace_members')
+        .select('workspace_id')
+        .eq('workspace_id', wsId)
+        .eq('user_id', userId)
+        .maybeSingle();
+    return data?.workspace_id || null;
 }
 
 module.exports = { getUserId, getWorkspaceId };
