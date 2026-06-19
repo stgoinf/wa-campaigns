@@ -1,9 +1,12 @@
-// GET /api/admin?view=users   → lista de todos los usuarios con sus estadísticas
-// GET /api/admin?view=stats   → métricas globales de la plataforma
+// GET  /api/admin?view=users           → lista de todos los usuarios con sus estadísticas
+// GET  /api/admin?view=stats           → métricas globales de la plataforma
+// POST /api/admin?action=create-user   → da de alta un cliente (email, password, workspaceName)
 // Solo accesible para el email de administrador
 
 const { adminClient, dbError } = require('./_lib/supabase');
 const { getUserId }   = require('./_lib/auth');
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function isAdmin(req) {
     const userId = await getUserId(req);
@@ -17,12 +20,15 @@ async function isAdmin(req) {
 }
 
 module.exports = async function handler(req, res) {
-    if (req.method !== 'GET') return res.status(405).end();
+    if (!['GET', 'POST'].includes(req.method)) return res.status(405).end();
 
     const adminId = await isAdmin(req);
     if (!adminId) return res.status(403).json({ error: 'Sin acceso. Solo el administrador puede ver este panel.' });
 
-    const sb   = adminClient();
+    const sb = adminClient();
+
+    if (req.method === 'POST') return handleAction(req, res, sb);
+
     const view = req.query.view || 'users';
 
     try {
@@ -100,3 +106,49 @@ module.exports = async function handler(req, res) {
         dbError(res, err);
     }
 };
+
+async function handleAction(req, res, sb) {
+    const action = req.query.action;
+
+    if (action === 'create-user') {
+        const { email, password, workspaceName } = req.body || {};
+
+        if (!email || !EMAIL_RE.test(email))      return res.status(400).json({ error: 'Email no válido.' });
+        if (!password || password.length < 8)     return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+        if (!workspaceName?.trim())               return res.status(400).json({ error: 'Se requiere un nombre para la cuenta (workspace).' });
+
+        const { data: created, error: cErr } = await sb.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,        // saltamos el flujo de verificación
+        });
+        if (cErr || !created?.user) {
+            const msg = cErr?.message || '';
+            const status = /already registered|exists/i.test(msg) ? 409 : 500;
+            return res.status(status).json({ error: msg ? `No se pudo crear el usuario: ${msg}` : 'No se pudo crear el usuario.' });
+        }
+
+        const newUserId = created.user.id;
+
+        const { data: ws, error: wErr } = await sb
+            .from('workspaces')
+            .insert({ user_id: newUserId, name: workspaceName.trim() })
+            .select('id, name')
+            .single();
+
+        if (wErr) {
+            // Cleanup: si no pudimos crear el workspace, no dejamos al usuario huérfano
+            await sb.auth.admin.deleteUser(newUserId).catch(() => {});
+            return dbError(res, wErr, 'No se pudo crear el workspace del cliente.');
+        }
+
+        return res.status(201).json({
+            userId:      newUserId,
+            email:       created.user.email,
+            workspaceId: ws.id,
+            workspaceName: ws.name,
+        });
+    }
+
+    return res.status(400).json({ error: 'action no soportada. Usa ?action=create-user.' });
+}

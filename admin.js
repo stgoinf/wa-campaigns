@@ -22,11 +22,12 @@ async function checkAdminAuth() {
     initAdmin(session);
 }
 
-async function authFetch(url) {
+async function authFetch(url, opts = {}) {
     const { data: { session } } = await sb.auth.getSession();
-    return fetch(url, {
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
-    });
+    const headers = { ...(opts.headers || {}) };
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+    if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    return fetch(url, { ...opts, headers });
 }
 
 // ─── Navegación ───────────────────────────────────────────────────────────────
@@ -45,7 +46,124 @@ function initAdmin(session) {
 
     document.getElementById('btn-refresh-users').addEventListener('click', loadUsers);
 
+    initCreateUserModal();
+
     loadUsers();
+}
+
+// ─── Modal: Crear cliente ────────────────────────────────────────────────────
+function initCreateUserModal() {
+    const modal   = document.getElementById('modal-create-user');
+    const form    = document.getElementById('form-create-user');
+    const success = document.getElementById('cu-success');
+    const errorEl = document.getElementById('cu-error');
+    const submit  = document.getElementById('cu-submit');
+
+    document.getElementById('btn-new-user').addEventListener('click', () => openCreateUserModal());
+
+    modal.querySelectorAll('[data-close-modal]').forEach(el => {
+        el.addEventListener('click', () => closeCreateUserModal({ reloadUsers: success.style.display === 'block' }));
+    });
+
+    document.getElementById('cu-pw-toggle').addEventListener('click', () => {
+        const inp  = document.getElementById('cu-password');
+        const icon = document.querySelector('#cu-pw-toggle i');
+        const visible = inp.type === 'text';
+        inp.type = visible ? 'password' : 'text';
+        icon.className = visible ? 'ph ph-eye' : 'ph ph-eye-slash';
+    });
+
+    document.getElementById('cu-gen-pw').addEventListener('click', () => {
+        const inp = document.getElementById('cu-password');
+        inp.value = generatePassword();
+        inp.type  = 'text';
+        document.querySelector('#cu-pw-toggle i').className = 'ph ph-eye-slash';
+    });
+
+    modal.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = document.getElementById(btn.dataset.copy);
+            if (!target) return;
+            navigator.clipboard?.writeText(target.textContent).then(() => {
+                const i = btn.querySelector('i');
+                const prev = i.className;
+                i.className = 'ph ph-check';
+                setTimeout(() => { i.className = prev; }, 1400);
+            }).catch(() => {});
+        });
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorEl.style.display = 'none';
+        const email         = document.getElementById('cu-email').value.trim();
+        const password      = document.getElementById('cu-password').value;
+        const workspaceName = document.getElementById('cu-workspace').value.trim();
+
+        if (!email || !password || !workspaceName) {
+            errorEl.textContent = 'Completa todos los campos.';
+            errorEl.style.display = 'block';
+            return;
+        }
+        if (password.length < 8) {
+            errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        submit.disabled = true;
+        const prevHtml = submit.innerHTML;
+        submit.innerHTML = '<i class="ph ph-circle-notch spin"></i> Creando...';
+
+        try {
+            const res = await authFetch('/api/admin?action=create-user', {
+                method: 'POST',
+                body:   JSON.stringify({ email, password, workspaceName }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'No se pudo crear el cliente.');
+
+            document.getElementById('cu-out-email').textContent = data.email;
+            document.getElementById('cu-out-pw').textContent    = password;
+            document.getElementById('cu-out-ws').textContent    = data.workspaceName;
+            form.style.display    = 'none';
+            success.style.display = 'block';
+        } catch (err) {
+            errorEl.textContent   = err.message;
+            errorEl.style.display = 'block';
+        } finally {
+            submit.disabled  = false;
+            submit.innerHTML = prevHtml;
+        }
+    });
+}
+
+function openCreateUserModal() {
+    const modal   = document.getElementById('modal-create-user');
+    const form    = document.getElementById('form-create-user');
+    const success = document.getElementById('cu-success');
+    form.reset();
+    form.style.display    = 'block';
+    success.style.display = 'none';
+    document.getElementById('cu-error').style.display = 'none';
+    document.getElementById('cu-password').type = 'password';
+    document.querySelector('#cu-pw-toggle i').className = 'ph ph-eye';
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('cu-email').focus(), 50);
+}
+
+function closeCreateUserModal({ reloadUsers } = {}) {
+    document.getElementById('modal-create-user').style.display = 'none';
+    if (reloadUsers) loadUsers();
+}
+
+function generatePassword(len = 12) {
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const buf   = new Uint8Array(len);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    let out = '';
+    for (let i = 0; i < len; i++) out += chars[buf[i] % chars.length];
+    return out;
 }
 
 // ─── Cargar lista de usuarios ─────────────────────────────────────────────────
