@@ -407,9 +407,29 @@
             </div>
 
             <div class="form-group">
-                <label for="cu-workspace">Nombre del workspace</label>
-                <input id="cu-workspace" type="text" class="glass-select" placeholder="Ej. Maikitos, Dominos…" maxlength="60" required>
-                <small>Es el nombre que verá el cliente en el switcher de cuentas.</small>
+                <label>Workspace</label>
+                <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem">
+                    <label class="ws-mode-pill">
+                        <input type="radio" name="cu-mode" value="new" checked>
+                        <span><i class="ph ph-plus-circle"></i> Crear nuevo</span>
+                    </label>
+                    <label class="ws-mode-pill">
+                        <input type="radio" name="cu-mode" value="existing">
+                        <span><i class="ph ph-link-simple"></i> Asignar existente</span>
+                    </label>
+                </div>
+
+                <div id="cu-mode-new">
+                    <input id="cu-workspace" type="text" class="glass-select" placeholder="Ej. Maikitos, Dominos…" maxlength="60">
+                    <small>Es el nombre que verá el cliente en el switcher de cuentas.</small>
+                </div>
+
+                <div id="cu-mode-existing" style="display:none">
+                    <select id="cu-workspace-id" class="glass-select">
+                        <option value="">Cargando workspaces…</option>
+                    </select>
+                    <small>El cliente entrará como <strong>miembro</strong>. El dueño original mantiene su acceso.</small>
+                </div>
             </div>
 
             <div id="cu-error" class="login-error" style="display:none"></div>

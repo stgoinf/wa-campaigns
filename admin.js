@@ -65,6 +65,17 @@ function initCreateUserModal() {
         el.addEventListener('click', () => closeCreateUserModal({ reloadUsers: success.style.display === 'block' }));
     });
 
+    // Toggle entre crear nuevo workspace y asignar existente
+    document.querySelectorAll('input[name="cu-mode"]').forEach(r => {
+        r.addEventListener('change', () => {
+            const isNew = r.value === 'new' && r.checked;
+            if (!r.checked) return;
+            document.getElementById('cu-mode-new').style.display      = isNew ? 'block' : 'none';
+            document.getElementById('cu-mode-existing').style.display = isNew ? 'none'  : 'block';
+            if (!isNew) loadWorkspaceOptions();
+        });
+    });
+
     document.getElementById('cu-pw-toggle').addEventListener('click', () => {
         const inp  = document.getElementById('cu-password');
         const icon = document.querySelector('#cu-pw-toggle i');
@@ -96,12 +107,12 @@ function initCreateUserModal() {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         errorEl.style.display = 'none';
-        const email         = document.getElementById('cu-email').value.trim();
-        const password      = document.getElementById('cu-password').value;
-        const workspaceName = document.getElementById('cu-workspace').value.trim();
+        const email    = document.getElementById('cu-email').value.trim();
+        const password = document.getElementById('cu-password').value;
+        const mode     = document.querySelector('input[name="cu-mode"]:checked')?.value || 'new';
 
-        if (!email || !password || !workspaceName) {
-            errorEl.textContent = 'Completa todos los campos.';
+        if (!email || !password) {
+            errorEl.textContent = 'Completa email y contraseña.';
             errorEl.style.display = 'block';
             return;
         }
@@ -111,6 +122,25 @@ function initCreateUserModal() {
             return;
         }
 
+        const body = { email, password };
+        if (mode === 'new') {
+            const workspaceName = document.getElementById('cu-workspace').value.trim();
+            if (!workspaceName) {
+                errorEl.textContent = 'Ingresa el nombre del workspace nuevo.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            body.workspaceName = workspaceName;
+        } else {
+            const workspaceId = document.getElementById('cu-workspace-id').value;
+            if (!workspaceId) {
+                errorEl.textContent = 'Elige el workspace al que asignar este cliente.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            body.workspaceId = workspaceId;
+        }
+
         submit.disabled = true;
         const prevHtml = submit.innerHTML;
         submit.innerHTML = '<i class="ph ph-circle-notch spin"></i> Creando...';
@@ -118,14 +148,17 @@ function initCreateUserModal() {
         try {
             const res = await authFetch('/api/admin?action=create-user', {
                 method: 'POST',
-                body:   JSON.stringify({ email, password, workspaceName }),
+                body:   JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'No se pudo crear el cliente.');
 
             document.getElementById('cu-out-email').textContent = data.email;
             document.getElementById('cu-out-pw').textContent    = password;
-            document.getElementById('cu-out-ws').textContent    = data.workspaceName;
+            const wsLabel = data.assigned
+                ? `${data.workspaceName} · asignado como miembro`
+                : `${data.workspaceName} · creado y asignado como dueño`;
+            document.getElementById('cu-out-ws').textContent = wsLabel;
             form.style.display    = 'none';
             success.style.display = 'block';
         } catch (err) {
@@ -136,6 +169,39 @@ function initCreateUserModal() {
             submit.innerHTML = prevHtml;
         }
     });
+}
+
+// Carga la lista de workspaces en el dropdown del modal (solo cuando se
+// escoge "Asignar existente"). Se cachea por sesión del modal.
+let workspaceOptionsCache = null;
+async function loadWorkspaceOptions() {
+    const select = document.getElementById('cu-workspace-id');
+    if (workspaceOptionsCache) {
+        renderWorkspaceOptions(select, workspaceOptionsCache);
+        return;
+    }
+    select.innerHTML = '<option value="">Cargando workspaces…</option>';
+    try {
+        const res = await authFetch('/api/admin?view=workspaces');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar la lista.');
+        workspaceOptionsCache = data.workspaces || [];
+        renderWorkspaceOptions(select, workspaceOptionsCache);
+    } catch (err) {
+        select.innerHTML = `<option value="">Error: ${escHtml(err.message)}</option>`;
+    }
+}
+function renderWorkspaceOptions(select, workspaces) {
+    if (!workspaces.length) {
+        select.innerHTML = '<option value="">No hay workspaces todavía</option>';
+        return;
+    }
+    select.innerHTML = '<option value="">Selecciona un workspace…</option>' +
+        workspaces.map(w => {
+            const meta = [w.owner_email, `${w.member_count} miembro${w.member_count === 1 ? '' : 's'}`]
+                .filter(Boolean).join(' · ');
+            return `<option value="${escHtml(w.id)}">${escHtml(w.name)} — ${escHtml(meta)}</option>`;
+        }).join('');
 }
 
 function openCreateUserModal() {

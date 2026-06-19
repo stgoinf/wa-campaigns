@@ -184,3 +184,12 @@ CREATE OR REPLACE FUNCTION increment_campaign_read(campaign_id BIGINT)
 RETURNS void LANGUAGE sql AS $$
   UPDATE campaigns SET leidos = leidos + 1 WHERE id = campaign_id;
 $$;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- Siguientes migraciones (NO incluidas en este archivo, ejecutar por separado):
+--
+-- 0002_workspace_members.sql — multi-usuario por workspace. Introduce la tabla
+--   workspace_members(workspace_id, user_id, role) y reescribe las políticas
+--   RLS para que el acceso a contacts/campaigns/app_settings se base en
+--   membresía en lugar de user_id. Backfill del dueño actual como 'owner'.
+-- ──────────────────────────────────────────────────────────────────────────────

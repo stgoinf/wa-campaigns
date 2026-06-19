@@ -1868,6 +1868,46 @@ input[type="checkbox"]#contacts-check-all {
 }
 
 /* ─────────────────────────────────────────────
+   Workspace mode pills (modal create-user)
+───────────────────────────────────────────── */
+.ws-mode-pill {
+    flex: 1;
+    cursor: pointer;
+    position: relative;
+}
+.ws-mode-pill input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0; height: 0;
+}
+.ws-mode-pill > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--surface-soft);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: var(--transition);
+    user-select: none;
+}
+.ws-mode-pill > span:hover { color: var(--text-primary); border-color: var(--brand-gamboge); }
+.ws-mode-pill input[type="radio"]:checked + span {
+    background: var(--accent-amber-dim);
+    border-color: var(--brand-gamboge);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+.ws-mode-pill input[type="radio"]:focus-visible + span {
+    outline: 2px solid var(--brand-gamboge);
+    outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────
    Modal footer (add-contact modal)
 ───────────────────────────────────────────── */
 .modal-footer {
