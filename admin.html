@@ -216,6 +216,19 @@
             transition: color 0.15s;
         }
         .expand-btn:hover { color: var(--text-primary); }
+        .user-row-actions {
+            display: inline-flex;
+            gap: 0.2rem;
+            align-items: center;
+        }
+        .user-row-actions .btn-icon-green,
+        .user-row-actions .btn-icon-warn,
+        .user-row-actions .btn-icon-red {
+            padding: 0.35rem 0.45rem;
+            min-width: 30px;
+            min-height: 30px;
+            font-size: 0.95rem;
+        }
 
         #access-denied {
             display: flex;
@@ -478,6 +491,92 @@
                 <button type="button" class="btn-primary" data-close-modal>Listo</button>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- ─── Modal: Resetear contraseña ─── -->
+<div id="modal-reset-password" class="modal" style="display:none">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-card glass-panel">
+        <div class="modal-header">
+            <h2><i class="ph ph-key"></i> Resetear contraseña</h2>
+            <button class="icon-btn" data-close-modal aria-label="Cerrar"><i class="ph ph-x"></i></button>
+        </div>
+
+        <form id="form-reset-password" novalidate>
+            <p style="font-size:var(--text-sm);color:var(--text-secondary);line-height:1.55;margin-bottom:1rem">
+                Vas a cambiar la contraseña de <strong id="rp-email">…</strong>. El cliente la podrá volver a cambiar desde su perfil.
+            </p>
+            <div class="form-group">
+                <label for="rp-password">Nueva contraseña <span class="label-hint">mínimo 8 caracteres</span></label>
+                <div class="password-wrapper">
+                    <input id="rp-password" type="text" class="glass-select" minlength="8" required>
+                    <button type="button" class="password-toggle icon-btn" id="rp-pw-toggle" aria-label="Mostrar/ocultar">
+                        <i class="ph ph-eye-slash"></i>
+                    </button>
+                </div>
+                <small>
+                    <button type="button" class="btn-inline" id="rp-gen-pw">
+                        <i class="ph ph-arrows-clockwise"></i> Generar
+                    </button>
+                </small>
+            </div>
+            <div id="rp-error" class="login-error" style="display:none"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-ghost" data-close-modal>Cancelar</button>
+                <button type="submit" class="btn-primary" id="rp-submit">
+                    <i class="ph ph-check"></i> Cambiar contraseña
+                </button>
+            </div>
+        </form>
+
+        <div id="rp-success" style="display:none">
+            <div class="login-success" style="margin-bottom:1.25rem">
+                <i class="ph-fill ph-check-circle"></i>
+                <span>Contraseña actualizada</span>
+            </div>
+            <p style="font-size:var(--text-sm);color:var(--text-secondary);margin-bottom:1rem">
+                Pásale esta contraseña al cliente. <strong>No se muestra de nuevo.</strong>
+            </p>
+            <div class="form-group">
+                <label>Nueva contraseña</label>
+                <div style="display:flex;gap:0.5rem;align-items:center">
+                    <code id="rp-out-pw" style="flex:1;padding:0.6rem 0.75rem;background:var(--surface-soft);border:1px solid var(--panel-border);border-radius:8px;font-size:var(--text-sm);font-family:'Outfit',monospace;letter-spacing:0.03em"></code>
+                    <button type="button" class="icon-btn" data-copy="rp-out-pw" aria-label="Copiar"><i class="ph ph-copy"></i></button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-primary" data-close-modal>Listo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Modal: Eliminar usuario ─── -->
+<div id="modal-delete-user" class="modal" style="display:none">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-card glass-panel">
+        <div class="modal-header">
+            <h2 style="color:var(--accent-red)"><i class="ph ph-warning-circle"></i> Eliminar cliente</h2>
+            <button class="icon-btn" data-close-modal aria-label="Cerrar"><i class="ph ph-x"></i></button>
+        </div>
+
+        <form id="form-delete-user" novalidate>
+            <div class="login-error" style="display:block;margin-bottom:1rem">
+                <strong>Acción irreversible.</strong> Se borra el usuario y, en cascada, todos los workspaces donde sea único dueño con sus contactos y campañas. Los workspaces compartidos (multi-membresía) sobreviven y el cliente solo pierde su acceso.
+            </div>
+            <div class="form-group">
+                <label for="du-confirm-email">Escribe el email <code id="du-target-email" style="background:var(--surface-soft);padding:1px 5px;border-radius:4px">…</code> para confirmar</label>
+                <input id="du-confirm-email" type="email" class="glass-select" autocomplete="off" required>
+            </div>
+            <div id="du-error" class="login-error" style="display:none"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-ghost" data-close-modal>Cancelar</button>
+                <button type="submit" class="btn-primary" id="du-submit" style="background:var(--accent-red)">
+                    <i class="ph ph-trash"></i> Eliminar cliente
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 

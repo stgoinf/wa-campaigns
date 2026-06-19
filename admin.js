@@ -51,6 +51,7 @@ function initAdmin(session) {
     document.getElementById('btn-refresh-users').addEventListener('click', loadUsers);
 
     initCreateUserModal();
+    initEditUserModals();
 
     loadUsers();
 }
@@ -293,10 +294,23 @@ async function loadUsers() {
                 <td><strong style="color:${u.sent > 0 ? '#6ee7b7' : 'var(--text-secondary)'}">${u.sent.toLocaleString()}</strong></td>
                 <td style="color:var(--text-secondary);font-size:0.82rem">${lastCamp}</td>
                 <td>
-                    ${u.recent_campaigns.length ? `
-                    <button class="expand-btn" onclick="toggleDetail(${i})" title="Ver campañas recientes">
-                        <i class="ph ph-caret-down" id="expand-icon-${i}"></i>
-                    </button>` : ''}
+                    <div class="user-row-actions">
+                        ${u.recent_campaigns.length ? `
+                        <button class="expand-btn" onclick="toggleDetail(${i})" title="Ver campañas recientes">
+                            <i class="ph ph-caret-down" id="expand-icon-${i}"></i>
+                        </button>` : ''}
+                        ${!u.confirmed ? `
+                        <button class="btn-icon-green" onclick="confirmUserEmail('${u.id}', this)" title="Confirmar email manualmente">
+                            <i class="ph ph-check-circle"></i>
+                        </button>` : ''}
+                        <button class="btn-icon-warn" onclick="openResetPasswordModal('${u.id}', '${escAttr(u.email)}')" title="Resetear contraseña">
+                            <i class="ph ph-key"></i>
+                        </button>
+                        ${!isAdmin ? `
+                        <button class="btn-icon-red" onclick="openDeleteUserModal('${u.id}', '${escAttr(u.email)}')" title="Eliminar usuario">
+                            <i class="ph ph-trash"></i>
+                        </button>` : ''}
+                    </div>
                 </td>
             </tr>
             <tr class="detail-row" id="detail-row-${i}">
@@ -352,6 +366,161 @@ function toggleDetail(idx) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function escHtml(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Para usar dentro de atributos HTML (escapa también la comilla simple)
+function escAttr(str) {
+    return escHtml(str).replace(/'/g, '&#39;');
+}
+
+// ─── Acciones por fila: confirmar email / resetear pw / eliminar ─────────────
+async function confirmUserEmail(userId, btn) {
+    if (!confirm('¿Confirmar el email manualmente? El usuario no recibirá correo.')) return;
+    const prev = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch spin"></i>';
+    try {
+        const res  = await authFetch('/api/admin?action=confirm-email', {
+            method: 'POST',
+            body:   JSON.stringify({ userId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo confirmar.');
+        await loadUsers();
+    } catch (err) {
+        alert('Error: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = prev;
+    }
+}
+
+function openResetPasswordModal(userId, email) {
+    const modal = document.getElementById('modal-reset-password');
+    modal.dataset.userId = userId;
+    document.getElementById('rp-email').textContent = email;
+    const pwInp = document.getElementById('rp-password');
+    pwInp.value = generatePassword();
+    pwInp.type  = 'text';
+    document.querySelector('#rp-pw-toggle i').className = 'ph ph-eye-slash';
+    document.getElementById('rp-error').style.display = 'none';
+    document.getElementById('form-reset-password').style.display = 'block';
+    document.getElementById('rp-success').style.display = 'none';
+    modal.style.display = 'flex';
+    setTimeout(() => pwInp.focus(), 50);
+}
+
+function openDeleteUserModal(userId, email) {
+    const modal = document.getElementById('modal-delete-user');
+    modal.dataset.userId    = userId;
+    modal.dataset.userEmail = email;
+    document.getElementById('du-target-email').textContent = email;
+    document.getElementById('du-confirm-email').value = '';
+    document.getElementById('du-error').style.display = 'none';
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('du-confirm-email').focus(), 50);
+}
+
+function initEditUserModals() {
+    // ── Reset password ──────────────────────────────────────────────────────
+    const rpModal = document.getElementById('modal-reset-password');
+    rpModal.querySelectorAll('[data-close-modal]').forEach(el => {
+        el.addEventListener('click', () => { rpModal.style.display = 'none'; });
+    });
+    document.getElementById('rp-pw-toggle').addEventListener('click', () => {
+        const inp  = document.getElementById('rp-password');
+        const icon = document.querySelector('#rp-pw-toggle i');
+        const visible = inp.type === 'text';
+        inp.type = visible ? 'password' : 'text';
+        icon.className = visible ? 'ph ph-eye' : 'ph ph-eye-slash';
+    });
+    document.getElementById('rp-gen-pw').addEventListener('click', () => {
+        const inp = document.getElementById('rp-password');
+        inp.value = generatePassword();
+        inp.type  = 'text';
+        document.querySelector('#rp-pw-toggle i').className = 'ph ph-eye-slash';
+    });
+    rpModal.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const t = document.getElementById(btn.dataset.copy);
+            navigator.clipboard?.writeText(t.textContent).then(() => {
+                const i = btn.querySelector('i');
+                const prev = i.className;
+                i.className = 'ph ph-check';
+                setTimeout(() => { i.className = prev; }, 1400);
+            }).catch(() => {});
+        });
+    });
+    document.getElementById('form-reset-password').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('rp-error');
+        errorEl.style.display = 'none';
+        const userId   = rpModal.dataset.userId;
+        const password = document.getElementById('rp-password').value;
+        if (!password || password.length < 8) {
+            errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+            errorEl.style.display = 'block';
+            return;
+        }
+        const submit = document.getElementById('rp-submit');
+        submit.disabled = true;
+        const prevHtml = submit.innerHTML;
+        submit.innerHTML = '<i class="ph ph-circle-notch spin"></i> Actualizando…';
+        try {
+            const res  = await authFetch('/api/admin?action=reset-password', {
+                method: 'POST',
+                body:   JSON.stringify({ userId, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'No se pudo actualizar.');
+            document.getElementById('rp-out-pw').textContent = password;
+            document.getElementById('form-reset-password').style.display = 'none';
+            document.getElementById('rp-success').style.display = 'block';
+        } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.style.display = 'block';
+        } finally {
+            submit.disabled = false;
+            submit.innerHTML = prevHtml;
+        }
+    });
+
+    // ── Delete user ─────────────────────────────────────────────────────────
+    const duModal = document.getElementById('modal-delete-user');
+    duModal.querySelectorAll('[data-close-modal]').forEach(el => {
+        el.addEventListener('click', () => { duModal.style.display = 'none'; });
+    });
+    document.getElementById('form-delete-user').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('du-error');
+        errorEl.style.display = 'none';
+        const userId       = duModal.dataset.userId;
+        const targetEmail  = duModal.dataset.userEmail;
+        const confirmEmail = document.getElementById('du-confirm-email').value.trim();
+        if (confirmEmail !== targetEmail) {
+            errorEl.textContent = 'El email no coincide.';
+            errorEl.style.display = 'block';
+            return;
+        }
+        const submit = document.getElementById('du-submit');
+        submit.disabled = true;
+        const prevHtml = submit.innerHTML;
+        submit.innerHTML = '<i class="ph ph-circle-notch spin"></i> Eliminando…';
+        try {
+            const res  = await authFetch('/api/admin?action=delete-user', {
+                method: 'POST',
+                body:   JSON.stringify({ userId, confirmEmail }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'No se pudo eliminar.');
+            duModal.style.display = 'none';
+            await loadUsers();
+        } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.style.display = 'block';
+        } finally {
+            submit.disabled = false;
+            submit.innerHTML = prevHtml;
+        }
+    });
 }
 
 // ─── Tema ─────────────────────────────────────────────────────────────────────
