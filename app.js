@@ -2,7 +2,7 @@
 // Supabase — cliente del browser (clave pública)
 // ─────────────────────────────────────────────
 const SUPABASE_URL      = 'https://lpliytimpwstaiydwfwk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable__8vr69KZjUcdO13BlwgqVQ_1rm5b6OU';
+const SUPABASE_ANON_KEY = 'sb_publishable_vsScrCXL6icSIHipYllxVA_9xqRo4W1';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─────────────────────────────────────────────
