@@ -536,7 +536,12 @@
                 <!-- Inputs ocultos que se rellenan al seleccionar una plantilla -->
                 <input type="hidden" id="f-template" required>
                 <input type="hidden" id="f-language" value="es">
-                <small id="f-template-hint">Selecciona una plantilla de la lista</small>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-top:0.25rem">
+                    <small id="f-template-hint">Selecciona una plantilla de la lista</small>
+                    <button type="button" class="btn-ghost btn-sm" id="btn-preview-template" disabled>
+                        <i class="ph ph-eye"></i> Vista previa
+                    </button>
+                </div>
             </div>
 
             <!-- Campos dinámicos según la plantilla seleccionada -->
@@ -571,6 +576,41 @@
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- ─── Modal: Vista previa de plantilla (estilo burbuja WhatsApp) ─── -->
+<div id="modal-template-preview" class="modal" style="display:none">
+    <div class="modal-overlay" data-close-modal></div>
+    <div class="modal-card glass-panel" style="max-width:420px;padding:1.25rem">
+        <div class="modal-header">
+            <h2><i class="ph ph-eye"></i> Vista previa</h2>
+            <button class="icon-btn" data-close-modal aria-label="Cerrar"><i class="ph ph-x"></i></button>
+        </div>
+
+        <p style="font-size:var(--text-xs);color:var(--text-secondary);margin-bottom:0.75rem">
+            Cómo lo verá el contacto. Las variables <code>{{N}}</code> sin valor se muestran en gris.
+        </p>
+
+        <div class="chat-bg">
+            <article class="bubble-out" id="tp-bubble">
+                <div id="tp-header-wrap" class="bubble-header-wrap" style="display:none">
+                    <img id="tp-header-img" class="bubble-header" alt="Header de la plantilla">
+                    <div id="tp-header-placeholder" class="bubble-header-placeholder" style="display:none">
+                        <i class="ph ph-image"></i>
+                        <span>Sube una imagen para previsualizar</span>
+                    </div>
+                </div>
+                <p id="tp-body" class="bubble-body"></p>
+                <small id="tp-footer" class="bubble-footer" style="display:none"></small>
+                <div id="tp-buttons" class="bubble-buttons" style="display:none"></div>
+                <span class="bubble-time">12:34 ✓✓</span>
+            </article>
+        </div>
+
+        <div class="modal-actions" style="margin-top:1rem">
+            <button type="button" class="btn-primary" data-close-modal>Cerrar</button>
+        </div>
     </div>
 </div>
 
