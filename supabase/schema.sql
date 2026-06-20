@@ -192,9 +192,4 @@ $$;
 --   workspace_members(workspace_id, user_id, role) y reescribe las políticas
 --   RLS para que el acceso a contacts/campaigns/app_settings se base en
 --   membresía en lugar de user_id. Backfill del dueño actual como 'owner'.
---
--- 0003_template_media_storage.sql — bucket público "template-media" para
---   imágenes de header de plantillas WhatsApp (5 MB, PNG/JPG). RLS para
---   uploads via anon key gated por membresía. Lectura pública (Meta debe
---   poder descargarlas sin auth).
 -- ──────────────────────────────────────────────────────────────────────────────

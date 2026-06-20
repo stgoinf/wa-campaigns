@@ -1295,46 +1295,32 @@ function generateDynamicFields(template, prefill = null) {
         const example    = fmt === 'IMAGE' ? 'jpg' : fmt === 'VIDEO' ? 'mp4' : 'pdf';
         const prefillUrl = prefillHeader?.parameters?.[0]?.[mediaKey]?.link || '';
 
-        if (fmt === 'IMAGE') {
-            // Dropzone + fallback URL. df-header-url queda como source-of-truth.
-            container.insertAdjacentHTML('beforeend', `
-                <div class="form-group">
-                    <label><i class="ph ${iconCls}"></i> Imagen del encabezado</label>
-                    <div id="df-img-dropzone" class="csv-dropzone" data-state="idle">
-                        <i class="ph ph-image"></i>
-                        <p><span>Click o arrastra</span> tu PNG o JPG (máx 5 MB)</p>
-                    </div>
-                    <input type="file" id="df-img-file" accept="image/png,image/jpeg" hidden>
-                    <input type="hidden" id="df-header-url"
-                        data-param-type="header" data-media-type="image"
-                        value="${escHtml(prefillUrl)}">
-                    <div id="df-img-preview" class="img-preview" style="${prefillUrl ? 'display:block' : 'display:none'}">
-                        <img id="df-img-tag" src="${escHtml(prefillUrl)}" alt="Vista previa">
-                    </div>
-                    <details class="img-url-fallback">
-                        <summary>Pegar URL en su lugar</summary>
-                        <input type="text" id="df-header-url-text" class="glass-select"
-                            placeholder="https://ejemplo.com/archivo.${example}"
-                            value="${escHtml(prefillUrl)}">
-                        <small>La URL debe ser accesible públicamente para que Meta pueda descargarla.</small>
-                    </details>
-                </div>
-            `);
+        container.insertAdjacentHTML('beforeend', `
+            <div class="form-group">
+                <label><i class="ph ${iconCls}"></i> URL del ${label} (encabezado)</label>
+                <input type="text" id="df-header-url" class="glass-select"
+                    placeholder="https://ejemplo.com/archivo.${example}"
+                    data-param-type="header" data-media-type="${mediaKey}"
+                    value="${escHtml(prefillUrl)}">
+                ${fmt === 'IMAGE' ? `
+                <div id="df-img-preview" class="img-preview" style="${prefillUrl ? 'display:block' : 'display:none'}">
+                    <img id="df-img-tag" src="${escHtml(prefillUrl)}" alt="Vista previa">
+                </div>` : ''}
+            </div>
+        `);
 
-            const dropzone = document.getElementById('df-img-dropzone');
-            const fileInp  = document.getElementById('df-img-file');
-            const urlHidden= document.getElementById('df-header-url');
-            const urlText  = document.getElementById('df-header-url-text');
+        if (fmt === 'IMAGE') {
+            const urlInput = document.getElementById('df-header-url');
             const preview  = document.getElementById('df-img-preview');
             const img      = document.getElementById('df-img-tag');
 
             function toEmbedUrl(raw) {
-                // Conservar el fix para Google Drive como fallback histórico.
+                // Google Drive: https://drive.google.com/file/d/FILE_ID/view  o  uc?id=FILE_ID
                 const driveFile = raw.match(/drive\.google\.com\/file\/d\/([^/?]+)/);
                 if (driveFile) return `https://drive.google.com/thumbnail?id=${driveFile[1]}&sz=w600`;
                 const driveUc = raw.match(/drive\.google\.com\/.*[?&]id=([^&]+)/);
                 if (driveUc) return `https://drive.google.com/thumbnail?id=${driveUc[1]}&sz=w600`;
-                return raw;
+                return raw; // URL directa, la usamos tal cual
             }
 
             function applyPreview(raw) {
@@ -1345,72 +1331,10 @@ function generateDynamicFields(template, prefill = null) {
                 img.onerror = () => { img.alt = '⚠️ No se puede mostrar la imagen. Verifica la URL.'; };
             }
 
-            function setUrl(url) {
-                urlHidden.value = url;
-                urlText.value   = url;
-                applyPreview(url);
-            }
+            // Aplicar al cargar si ya hay URL (prefill de campaña anterior)
+            if (urlInput.value.trim()) applyPreview(urlInput.value.trim());
 
-            async function uploadHeaderImage(file) {
-                if (!file) return;
-                if (!['image/png', 'image/jpeg'].includes(file.type)) {
-                    dropzone.dataset.state = 'error';
-                    dropzone.querySelector('p').innerHTML = '<span>Formato no soportado</span> — usa PNG o JPG';
-                    return;
-                }
-                if (file.size > 5 * 1024 * 1024) {
-                    dropzone.dataset.state = 'error';
-                    dropzone.querySelector('p').innerHTML = `<span>Archivo grande</span> — ${(file.size/1024/1024).toFixed(1)} MB · máx 5 MB`;
-                    return;
-                }
-                dropzone.dataset.state = 'uploading';
-                dropzone.querySelector('p').innerHTML = '<span>Subiendo…</span>';
-                try {
-                    const dataB64 = await fileToBase64(file);
-                    const res = await authFetch('/api/uploads/image', {
-                        method:  'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body:    JSON.stringify({ filename: file.name, mime: file.type, dataB64 }),
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || 'Error al subir.');
-                    setUrl(data.url);
-                    dropzone.dataset.state = 'done';
-                    dropzone.querySelector('p').innerHTML = `<span>${escHtml(file.name)}</span> · ${(file.size/1024).toFixed(0)} KB subida ✓`;
-                } catch (err) {
-                    dropzone.dataset.state = 'error';
-                    dropzone.querySelector('p').innerHTML = `<span>Error</span> ${escHtml(err.message)}`;
-                }
-            }
-
-            dropzone.addEventListener('click', () => fileInp.click());
-            dropzone.addEventListener('dragover', e => {
-                e.preventDefault();
-                dropzone.classList.add('dropzone-over');
-            });
-            dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dropzone-over'));
-            dropzone.addEventListener('drop', e => {
-                e.preventDefault();
-                dropzone.classList.remove('dropzone-over');
-                uploadHeaderImage(e.dataTransfer.files?.[0]);
-            });
-            fileInp.addEventListener('change', e => uploadHeaderImage(e.target.files?.[0]));
-            urlText.addEventListener('input', e => setUrl(e.target.value.trim()));
-
-            // Prefill de campaña anterior
-            if (prefillUrl) applyPreview(prefillUrl);
-
-        } else {
-            // VIDEO / DOCUMENT — sin storage por ahora, solo URL como antes
-            container.insertAdjacentHTML('beforeend', `
-                <div class="form-group">
-                    <label><i class="ph ${iconCls}"></i> URL del ${label} (encabezado)</label>
-                    <input type="text" id="df-header-url" class="glass-select"
-                        placeholder="https://ejemplo.com/archivo.${example}"
-                        data-param-type="header" data-media-type="${mediaKey}"
-                        value="${escHtml(prefillUrl)}">
-                </div>
-            `);
+            urlInput.addEventListener('input', e => applyPreview(e.target.value.trim()));
         }
     }
 
@@ -2240,20 +2164,6 @@ function statusLabel(s) {
 function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
                       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-// Convierte un File en base64 puro (sin el prefijo data:...;base64,)
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(new Error('No se pudo leer el archivo.'));
-        fr.onload  = () => {
-            const result = String(fr.result || '');
-            const comma  = result.indexOf(',');
-            resolve(comma >= 0 ? result.slice(comma + 1) : result);
-        };
-        fr.readAsDataURL(file);
-    });
 }
 
 // ─────────────────────────────────────────────
