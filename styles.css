@@ -1868,6 +1868,140 @@ input[type="checkbox"]#contacts-check-all {
 }
 
 /* ─────────────────────────────────────────────
+   Vista previa de plantilla (burbuja WhatsApp)
+───────────────────────────────────────────── */
+.chat-bg {
+    background: #ECE5DD;
+    background-image:
+        radial-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+        radial-gradient(rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 18px 18px;
+    background-position: 0 0, 9px 9px;
+    padding: 1.25rem;
+    border-radius: 12px;
+    border: 1px solid var(--panel-border);
+    min-height: 220px;
+}
+[data-theme="dark"] .chat-bg {
+    background: #0b1015;
+    background-image:
+        radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
+}
+
+.bubble-out {
+    position: relative;
+    max-width: 90%;
+    margin-left: auto;
+    background: #DCF8C6;
+    color: #0e2127;
+    padding: 0.55rem 0.7rem 1.35rem;
+    border-radius: 10px;
+    box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+    font-size: var(--text-sm);
+    line-height: 1.45;
+    word-wrap: break-word;
+}
+.bubble-out::after {
+    content: '';
+    position: absolute;
+    right: -6px; top: 0;
+    width: 0; height: 0;
+    border-left: 8px solid #DCF8C6;
+    border-bottom: 8px solid transparent;
+}
+[data-theme="dark"] .bubble-out {
+    background: #056162;
+    color: #f0f6f7;
+}
+[data-theme="dark"] .bubble-out::after { border-left-color: #056162; }
+
+.bubble-header-wrap { margin-bottom: 0.5rem; }
+.bubble-header {
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: 6px;
+    display: block;
+}
+.bubble-header-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    height: 140px;
+    background: rgba(0,0,0,0.05);
+    border: 1px dashed rgba(0,0,0,0.2);
+    border-radius: 6px;
+    color: rgba(0,0,0,0.5);
+    font-size: var(--text-xs);
+}
+.bubble-header-placeholder i { font-size: 1.6rem; }
+[data-theme="dark"] .bubble-header-placeholder {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.5);
+}
+
+.bubble-body { margin: 0; white-space: pre-wrap; }
+.bubble-var-empty {
+    color: rgba(0,0,0,0.35);
+    font-style: italic;
+}
+[data-theme="dark"] .bubble-var-empty { color: rgba(255,255,255,0.35); }
+
+.bubble-footer {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    color: rgba(0,0,0,0.45);
+}
+[data-theme="dark"] .bubble-footer { color: rgba(255,255,255,0.45); }
+
+.bubble-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.6rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(0,0,0,0.1);
+}
+[data-theme="dark"] .bubble-buttons { border-top-color: rgba(255,255,255,0.1); }
+.bubble-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    background: transparent;
+    border: none;
+    color: #00a884;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: default;
+    border-radius: 4px;
+}
+[data-theme="dark"] .bubble-btn { color: #53bdeb; }
+
+.bubble-time {
+    position: absolute;
+    right: 0.55rem;
+    bottom: 0.35rem;
+    font-size: 0.65rem;
+    color: rgba(0,0,0,0.45);
+}
+[data-theme="dark"] .bubble-time { color: rgba(255,255,255,0.55); }
+
+.tpl-preview-btn {
+    padding: 0.25rem 0.4rem !important;
+    min-width: 28px;
+    min-height: 28px;
+    font-size: 0.95rem;
+}
+
+/* ─────────────────────────────────────────────
    Workspace mode pills (modal create-user)
 ───────────────────────────────────────────── */
 .ws-mode-pill {

@@ -702,6 +702,11 @@ function renderTemplatesList(templates) {
                 <div class="template-meta">
                     <span class="tag tag-lang">${escHtml(t.language)}</span>
                     <span class="tag tag-cat">${escHtml(t.category)}</span>
+                    <button class="icon-btn tpl-preview-btn"
+                            onclick="openTemplatePreview('${escHtml(t.name)}', null)"
+                            title="Vista previa" aria-label="Vista previa">
+                        <i class="ph ph-eye"></i>
+                    </button>
                 </div>
             </div>
             <p class="template-preview">${escHtml(preview)}</p>
@@ -1267,8 +1272,125 @@ function selectTemplate(name, prefill = null) {
     hint.textContent = `✓ Seleccionada: ${template.name}  ·  Idioma: ${template.language}`;
     hint.style.color = 'var(--accent-green)';
 
+    // Habilitar y wirear el botón "Vista previa"
+    const previewBtn = document.getElementById('btn-preview-template');
+    if (previewBtn) {
+        previewBtn.disabled = false;
+        previewBtn.onclick = () => openTemplatePreview(template.name, 'from-modal');
+    }
+
     // Generar campos dinámicos (con valores pre-llenados si se pasa prefill)
     generateDynamicFields(template, prefill);
+}
+
+// ─── Vista previa de plantilla (estilo burbuja WhatsApp) ─────────────────────
+// mode = 'from-modal' lee valores del form (df-header-url + df-body-N);
+// mode = null/otro → muestra los placeholders {{N}} literales y sin imagen.
+function openTemplatePreview(name, mode) {
+    const template = cachedTemplates.find(t => t.name === name);
+    if (!template) return;
+    const modal = document.getElementById('modal-template-preview');
+    const fromModal = mode === 'from-modal';
+
+    const headerComp = template.components?.find(c => c.type === 'HEADER');
+    const bodyComp   = template.components?.find(c => c.type === 'BODY');
+    const footerComp = template.components?.find(c => c.type === 'FOOTER');
+    const btnsComp   = template.components?.find(c => c.type === 'BUTTONS');
+
+    // ── Header (IMAGE only en este preview; VIDEO/DOC/TEXT como placeholder) ──
+    const headerWrap   = document.getElementById('tp-header-wrap');
+    const headerImg    = document.getElementById('tp-header-img');
+    const headerPlaceholder = document.getElementById('tp-header-placeholder');
+
+    headerWrap.style.display = 'none';
+    if (headerComp && headerComp.format === 'IMAGE') {
+        const url = fromModal
+            ? (document.getElementById('df-header-url')?.value || '').trim()
+            : '';
+        headerWrap.style.display = 'block';
+        if (url) {
+            headerImg.src = url;
+            headerImg.style.display = 'block';
+            headerImg.onerror = () => {
+                headerImg.style.display = 'none';
+                headerPlaceholder.style.display = 'flex';
+                headerPlaceholder.querySelector('span').textContent = 'No se pudo cargar la imagen';
+            };
+            headerPlaceholder.style.display = 'none';
+        } else {
+            headerImg.style.display = 'none';
+            headerPlaceholder.style.display = 'flex';
+            headerPlaceholder.querySelector('span').textContent = fromModal
+                ? 'Sube una imagen para previsualizar'
+                : 'Imagen (placeholder)';
+        }
+    }
+
+    // ── Body con sustitución de {{N}} ──
+    const tpBody = document.getElementById('tp-body');
+    let text = bodyComp?.text || '(sin texto de cuerpo)';
+    if (fromModal) {
+        const bodyInputs = [...document.querySelectorAll('[data-param-type="body"]')];
+        const values = {};
+        bodyInputs.forEach(i => { values[i.dataset.varNum] = i.value.trim(); });
+        text = text.replace(/\{\{(\d+)\}\}/g, (_, n) => {
+            const v = values[n];
+            return v
+                ? escHtml(v)
+                : `<span class="bubble-var-empty">{{${n}}}</span>`;
+        });
+        tpBody.innerHTML = text.replace(/\n/g, '<br>');
+    } else {
+        // Sin sustitución: muestra los {{N}} literales en gris
+        tpBody.innerHTML = escHtml(text)
+            .replace(/\{\{(\d+)\}\}/g, '<span class="bubble-var-empty">{{$1}}</span>')
+            .replace(/\n/g, '<br>');
+    }
+
+    // ── Footer ──
+    const tpFooter = document.getElementById('tp-footer');
+    if (footerComp?.text) {
+        tpFooter.textContent = footerComp.text;
+        tpFooter.style.display = 'block';
+    } else {
+        tpFooter.style.display = 'none';
+    }
+
+    // ── Buttons (QUICK_REPLY, URL, PHONE_NUMBER → chips no-funcionales) ──
+    const tpButtons = document.getElementById('tp-buttons');
+    const buttons   = btnsComp?.buttons || [];
+    if (buttons.length) {
+        tpButtons.innerHTML = buttons.map(b => {
+            const icon =
+                b.type === 'URL'           ? 'ph ph-link-simple'
+              : b.type === 'PHONE_NUMBER'  ? 'ph ph-phone'
+              : b.type === 'QUICK_REPLY'   ? 'ph ph-chat-circle-text'
+              :                              'ph ph-square';
+            const label = b.text || (b.type || 'Botón');
+            return `<button class="bubble-btn" disabled><i class="${icon}"></i> ${escHtml(label)}</button>`;
+        }).join('');
+        tpButtons.style.display = 'flex';
+    } else {
+        tpButtons.style.display = 'none';
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeTemplatePreview() {
+    document.getElementById('modal-template-preview').style.display = 'none';
+}
+
+// Wire close + ESC global (se llama una vez en init)
+function initTemplatePreviewModal() {
+    const modal = document.getElementById('modal-template-preview');
+    if (!modal) return;
+    modal.querySelectorAll('[data-close-modal]').forEach(el => {
+        el.addEventListener('click', closeTemplatePreview);
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') closeTemplatePreview();
+    });
 }
 
 function generateDynamicFields(template, prefill = null) {
@@ -1417,6 +1539,8 @@ function closeCampaignModal() {
     const hint = document.getElementById('f-template-hint');
     hint.textContent = 'Selecciona una plantilla de la lista';
     hint.style.color = '';
+    const previewBtn = document.getElementById('btn-preview-template');
+    if (previewBtn) { previewBtn.disabled = true; previewBtn.onclick = null; }
 }
 async function updateContactPreview() {
     const source   = document.getElementById('f-source').value;
@@ -2216,6 +2340,7 @@ function getThemeChartColors() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
+    initTemplatePreviewModal();
     setupAuth();
     await checkAuth();
     // init() se llama solo si ya hay sesión activa
