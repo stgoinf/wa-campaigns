@@ -1,0 +1,9 @@
+# Nixpacks config explícita para Railway.
+# Algunos builders Railpack más nuevos ignoran railway.json y necesitan
+# este archivo como source-of-truth para detectar el start command.
+
+[start]
+cmd = "node server.js"
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
