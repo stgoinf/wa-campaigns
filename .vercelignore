@@ -1,0 +1,13 @@
+# Backend movido a Railway. Vercel solo sirve el frontend estático y
+# proxea /api/* a Railway vía rewrites en vercel.json.
+# Estos archivos se quedan en el repo (Railway los usa) pero NO se
+# despliegan como serverless functions en Vercel — eso liberaba el
+# slot 13+ que el plan Hobby limitaba a 12.
+
+api/
+server.js
+cron-tick.js
+railway.json
+nixpacks.toml
+package-lock.json
+supabase/
