@@ -2,9 +2,12 @@
   "framework": null,
   "buildCommand": null,
   "outputDirectory": ".",
-  "functions": {
-    "api/**/*.js": { "maxDuration": 30 }
-  },
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://api-production-0b3e.up.railway.app/api/$1"
+    }
+  ]
 }
