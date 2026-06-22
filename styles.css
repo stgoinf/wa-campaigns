@@ -777,6 +777,7 @@ header p { color: var(--text-secondary); font-size: var(--text-base); line-heigh
     border: 1px solid transparent;
 }
 .status-badge.draft     { background: var(--surface-strong);    color: var(--text-primary); border-color: var(--border-soft); }
+.status-badge.scheduled { background: var(--accent-blue-dim);   color: var(--accent-blue);  border-color: rgba(77,159,170,0.32); }
 .status-badge.running   { background: var(--accent-green-dim);  color: var(--accent-green); border-color: rgba(235,152,39,0.32); }
 .status-badge.paused    { background: var(--accent-amber-dim);  color: var(--accent-amber); border-color: rgba(201,125,21,0.32); }
 .status-badge.completed { background: var(--accent-blue-dim);   color: var(--accent-blue);  border-color: rgba(77,159,170,0.32); }

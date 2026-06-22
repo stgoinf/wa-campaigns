@@ -29,11 +29,24 @@ module.exports = async function handler(req, res) {
     if (req.method === 'POST') {
         const {
             nombre, templateName, templateLanguage = 'es',
-            templateParams = [], source = 'all', etiqueta
+            templateParams = [], source = 'all', etiqueta,
+            scheduledFor,    // ISO string opcional. Si está → scheduled. Si no → ahora.
         } = req.body;
 
         if (!nombre || !templateName) {
             return res.status(400).json({ error: 'nombre y templateName son obligatorios' });
+        }
+
+        // Determinar momento de envío. El worker procesa todo lo que tenga
+        // scheduled_for <= NOW(), así que un envío "inmediato" es simplemente
+        // scheduled_for = ahora (el cron lo levanta en máx ~60s).
+        let scheduledAt = new Date();
+        if (scheduledFor) {
+            const parsed = new Date(scheduledFor);
+            if (isNaN(parsed.getTime())) {
+                return res.status(400).json({ error: 'scheduledFor inválido (debe ser ISO 8601).' });
+            }
+            scheduledAt = parsed;
         }
 
         // Obtener TODOS los contactos paginando en bloques de 1000
@@ -64,6 +77,8 @@ module.exports = async function handler(req, res) {
                 total:             contacts.length,
                 user_id:           userId,
                 workspace_id:      workspaceId,
+                status:            'scheduled',
+                scheduled_for:     scheduledAt.toISOString(),
             })
             .select()
             .single();

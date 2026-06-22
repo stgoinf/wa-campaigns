@@ -922,7 +922,15 @@ function toggleCampaignGroup(idx) {
     icon.className = open ? 'ph ph-caret-right' : 'ph ph-caret-down';
 }
 
-// ── Campaign runner (loop en el browser) ──────
+// ── Campaign runner (server-side via Railway cron worker) ──────
+//
+// El envío ya NO se ejecuta en el browser. POST /api/campaigns/manage?action=start
+// solo cambia el status a 'running'; el worker de Railway (cada 1 min) toma
+// la campaña y procesa los mensajes pending con sendTemplate concurrente.
+//
+// El monitor se actualiza vía la suscripción Realtime de Supabase
+// (subscribeToRealtime) que ya escucha cambios en campaigns y
+// campaign_messages — el progreso aparece sin que el browser haga nada.
 
 async function startCampaign(id) {
     try {
@@ -936,108 +944,9 @@ async function startCampaign(id) {
         showMonitor(camp);
         subscribeToRealtime(id);
         loadCampaigns();
-
-        runCampaignLoop(id, camp);
+        // No hay loop browser — el worker server-side procesa en máx ~1 min.
     } catch (err) {
         alert('Error al iniciar: ' + err.message);
-    }
-}
-
-async function runCampaignLoop(campaignId, campData) {
-    const BATCH_SIZE             = 3;    // mensajes en paralelo por lote
-    const BATCH_DELAY_MS         = 150;  // pausa entre lotes (ms)
-    const STATUS_CHECK_EVERY     = 15;   // revisar pausa remota cada N mensajes
-    const RATE_LIMIT_PAUSE_MS    = 5000; // espera tras rate limit antes de reintentar
-    const MAX_CONSECUTIVE_ERRORS = 10;   // errores seguidos antes de auto-pausar
-    const delay = ms => new Promise(r => setTimeout(r, ms));
-
-    let sentCount        = 0;
-    let consecutiveErrors = 0;
-
-    // Envía un mensaje individual con manejo de rate limit (1 reintento automático)
-    async function sendOne(msg) {
-        const body = JSON.stringify({
-            campaignId,
-            messageId:        msg.id,
-            telefono:         msg.telefono,
-            templateName:     campData.template_name,
-            templateLanguage: campData.template_language,
-            templateParams:   campData.template_params || [],
-        });
-
-        let result;
-        try {
-            result = await (await authFetch('/api/send', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
-            })).json();
-        } catch { return { success: false, networkError: true }; }
-
-        if (result.rateLimited) {
-            // Rate limit → esperar 5s y reintentar una vez
-            addFeedEntry(msg.telefono, 'failed', '⏸ Rate limit — esperando 5s...');
-            await delay(RATE_LIMIT_PAUSE_MS);
-            if (!campaignRunning) return result;
-            try {
-                result = await (await authFetch('/api/send', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
-                })).json();
-                if (result.rateLimited) {
-                    addFeedEntry(msg.telefono, 'failed', '⛔ Rate limit persistente');
-                }
-            } catch { return { success: false, networkError: true }; }
-        }
-
-        return result;
-    }
-
-    while (campaignRunning) {
-        // Revisar pausa externa solo cada STATUS_CHECK_EVERY mensajes
-        if (sentCount > 0 && sentCount % STATUS_CHECK_EVERY === 0) {
-            const check = await (await authFetch(`/api/campaigns/${campaignId}`)).json();
-            if (check.status !== 'running') { campaignRunning = false; break; }
-        }
-
-        // Obtener lote de N mensajes pendientes en una sola consulta
-        const { data: batch } = await sb
-            .from('campaign_messages')
-            .select('id, telefono')
-            .eq('campaign_id', campaignId)
-            .eq('status', 'pending')
-            .limit(BATCH_SIZE);
-
-        if (!batch || batch.length === 0) {
-            // Todos enviados → completar
-            await authFetch(`/api/campaigns/manage?action=complete&id=${campaignId}`, { method: 'POST' });
-            campaignRunning = false;
-            break;
-        }
-
-        // Enviar lote en paralelo con manejo de errores por mensaje
-        const results = await Promise.all(batch.map(msg => sendOne(msg)));
-
-        // Contar errores consecutivos
-        for (const r of results) {
-            if (r.success) {
-                consecutiveErrors = 0;
-            } else if (!r.rateLimited) {
-                consecutiveErrors++;
-                if (r.error) addFeedEntry('—', 'failed', `Error: ${r.error}`);
-            }
-        }
-
-        // Auto-pausar si hay demasiados errores seguidos
-        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-            addFeedEntry('—', 'failed', `⛔ ${MAX_CONSECUTIVE_ERRORS} errores seguidos — pausando campaña`);
-            campaignRunning = false;
-            await authFetch(`/api/campaigns/manage?action=pause&id=${campaignId}`, { method: 'POST' });
-            loadCampaigns();
-            break;
-        }
-
-        sentCount += batch.length;
-
-        // Pausa mínima entre lotes para no saturar la API de WhatsApp
-        if (campaignRunning) await delay(BATCH_DELAY_MS);
     }
 }
 
@@ -1570,7 +1479,24 @@ async function submitCampaign(e) {
         return;
     }
 
-    showLoader(true, 'Creando campaña...');
+    // Convertir el valor del datetime-local (en zona horaria local) a ISO UTC.
+    // Vacío = enviar ahora (el worker lo levanta en ≤1 min).
+    const schedRaw = document.getElementById('f-scheduled-for')?.value || '';
+    let scheduledFor = null;
+    if (schedRaw) {
+        const d = new Date(schedRaw);
+        if (isNaN(d.getTime())) {
+            alert('Fecha/hora inválida.');
+            return;
+        }
+        if (d.getTime() < Date.now() - 60_000) {
+            alert('La fecha/hora ya pasó. Deja vacío para enviar ahora.');
+            return;
+        }
+        scheduledFor = d.toISOString();
+    }
+
+    showLoader(true, scheduledFor ? 'Programando campaña...' : 'Creando campaña...');
     try {
         const res  = await authFetch('/api/campaigns', {
             method: 'POST',
@@ -1581,7 +1507,8 @@ async function submitCampaign(e) {
                 templateLanguage: document.getElementById('f-language').value,
                 templateParams:   buildTemplateParams(),
                 source:           document.getElementById('f-source').value,
-                etiqueta:         document.getElementById('f-etiqueta').value.trim() || undefined
+                etiqueta:         document.getElementById('f-etiqueta').value.trim() || undefined,
+                scheduledFor,
             })
         });
         const data = await res.json();
@@ -2283,7 +2210,14 @@ function showLoader(on, text = 'Procesando...') {
     loader.classList.toggle('active', on);
 }
 function statusLabel(s) {
-    return { draft:'Borrador', running:'En ejecución', paused:'Pausada', completed:'Completada', failed:'Error' }[s] ?? s;
+    return {
+        draft:     'Borrador',
+        scheduled: 'Programada',
+        running:   'En ejecución',
+        paused:    'Pausada',
+        completed: 'Completada',
+        failed:    'Error',
+    }[s] ?? s;
 }
 function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
