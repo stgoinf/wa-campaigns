@@ -1,16 +1,11 @@
-// POST /api/campaigns/tick
-// Worker server-side disparado por Railway cron service cada 1 min.
+// /api/campaigns/tick — worker que procesa scheduling de campañas.
 //
-// Hace 3 cosas:
-//   1. Rescata mensajes 'claimed' colgados (>5 min sin enviar).
-//   2. Promueve campañas 'scheduled' cuyo scheduled_for <= NOW() a 'running'.
-//   3. Procesa N mensajes pending de campañas 'running': claim → enviar →
-//      actualizar status + contador. Marca 'completed' cuando no quedan
-//      mensajes.
+// Se ejecuta de DOS formas:
+//   1. setInterval interno desde server.js (cada N segundos, default 60s).
+//      Esto es lo que mantiene las campañas avanzando en producción.
+//   2. POST HTTP gated por x-cron-secret (útil para manual trigger / debug).
 //
-// Gated por header x-cron-secret (matches process.env.CRON_SECRET).
-// El budget es ilimitado en Railway (always-on) pero capamos por tick para
-// no quemar la quota de Meta de un workspace en una sola pasada.
+// La lógica está en runTick(); el handler HTTP solo es una envoltura.
 
 const { adminClient, dbError } = require('../_lib/supabase');
 const { sendTemplate }         = require('../_lib/whatsapp');
@@ -19,14 +14,15 @@ const BATCH_PER_CAMPAIGN = 120;   // mensajes a procesar por campaña por tick
 const CONCURRENCY        = 8;     // envíos en paralelo
 const MAX_CAMPAIGNS_TICK = 10;    // campañas a procesar en un tick
 
-module.exports = async function handler(req, res) {
-    if (req.method !== 'POST') return res.status(405).end();
+// Lock booleano para que dos invocaciones no se solapen (e.g. setInterval
+// dispara antes de que el anterior haya terminado).
+let runningTick = false;
 
-    const provided = req.headers['x-cron-secret'];
-    const expected = process.env.CRON_SECRET;
-    if (!expected || provided !== expected) {
-        return res.status(401).json({ error: 'invalid cron secret' });
+async function runTick() {
+    if (runningTick) {
+        return { ok: false, skipped: true, reason: 'tick already running' };
     }
+    runningTick = true;
 
     const sb = adminClient();
     const start = Date.now();
@@ -41,11 +37,11 @@ module.exports = async function handler(req, res) {
     };
 
     try {
-        // 1. Rescate de claims colgados ──────────────────────────────────
+        // 1. Rescate de claims colgados
         const { data: rescued } = await sb.rpc('rescue_stuck_claims');
         summary.rescued = Number(rescued) || 0;
 
-        // 2. Promover scheduled → running ────────────────────────────────
+        // 2. Promover scheduled → running
         const { data: promoted, error: pErr } = await sb
             .from('campaigns')
             .update({ status: 'running', started_at: new Date().toISOString() })
@@ -55,7 +51,7 @@ module.exports = async function handler(req, res) {
         if (pErr) throw pErr;
         summary.promoted = (promoted || []).length;
 
-        // 3. Tomar lista de campañas running para procesar ───────────────
+        // 3. Procesar running
         const { data: running, error: rErr } = await sb
             .from('campaigns')
             .select('id, workspace_id, template_name, template_language, template_params, total, enviados, fallidos')
@@ -67,7 +63,6 @@ module.exports = async function handler(req, res) {
         for (const camp of running || []) {
             summary.campaignsProcessed++;
 
-            // Reservar lote
             const { data: claimed, error: cErr } = await sb.rpc('claim_pending_messages', {
                 p_campaign_id: camp.id,
                 p_limit:       BATCH_PER_CAMPAIGN,
@@ -79,7 +74,6 @@ module.exports = async function handler(req, res) {
 
             const messages = claimed || [];
             if (messages.length === 0) {
-                // No quedan pending. Cerrar si todo procesado.
                 if ((camp.enviados + camp.fallidos) >= camp.total) {
                     await sb.from('campaigns')
                         .update({ status: 'completed', completed_at: new Date().toISOString() })
@@ -89,7 +83,6 @@ module.exports = async function handler(req, res) {
                 continue;
             }
 
-            // Enviar con concurrency limitada
             await processInChunks(messages, CONCURRENCY, async (msg) => {
                 try {
                     const waId = await sendTemplate(
@@ -106,7 +99,6 @@ module.exports = async function handler(req, res) {
                           .eq('id', msg.id),
                         sb.rpc('increment_campaign_sent', { campaign_id: camp.id }),
                     ]);
-                    // Mejor esfuerzo: actualizar last_sent_at del contacto
                     sb.from('contacts')
                       .update({ last_sent_at: now, last_template: camp.template_name })
                       .eq('telefono', msg.telefono)
@@ -116,7 +108,6 @@ module.exports = async function handler(req, res) {
                 } catch (err) {
                     const isRateLimit = err.code === 130429 || err.httpStatus === 429;
                     if (isRateLimit) {
-                        // Devolver al pool pending para el próximo tick
                         await sb.from('campaign_messages')
                             .update({ status: 'pending', claimed_at: null })
                             .eq('id', msg.id);
@@ -134,19 +125,40 @@ module.exports = async function handler(req, res) {
         }
 
         summary.elapsedMs = Date.now() - start;
-        console.log('[tick]', JSON.stringify(summary));
-        return res.json({ ok: true, ...summary });
-
-    } catch (err) {
-        console.error('[tick] fatal', err);
-        return dbError(res, err, 'Tick error');
+        return { ok: true, ...summary };
+    } finally {
+        runningTick = false;
     }
-};
+}
 
-// Helper: procesa items en lotes paralelos de tamaño N.
 async function processInChunks(items, concurrency, fn) {
     for (let i = 0; i < items.length; i += concurrency) {
         const chunk = items.slice(i, i + concurrency);
         await Promise.all(chunk.map(fn));
     }
 }
+
+// Handler HTTP — gated por x-cron-secret. Devuelve el summary del runTick.
+module.exports = async function handler(req, res) {
+    if (req.method !== 'POST') return res.status(405).end();
+
+    const provided = req.headers['x-cron-secret'];
+    const expected = process.env.CRON_SECRET;
+    if (!expected || provided !== expected) {
+        return res.status(401).json({ error: 'invalid cron secret' });
+    }
+
+    try {
+        const out = await runTick();
+        if (!out.ok && !out.skipped) {
+            return res.status(500).json({ error: 'Tick error' });
+        }
+        return res.json(out);
+    } catch (err) {
+        console.error('[tick] fatal', err);
+        return dbError(res, err, 'Tick error');
+    }
+};
+
+// Exportada para que server.js la corra en setInterval interno.
+module.exports.runTick = runTick;
