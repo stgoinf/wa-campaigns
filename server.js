@@ -56,11 +56,12 @@ app.all('/api/contacts',        adapt(require('./api/contacts/index')));
 app.all('/api/contacts/upload', adapt(require('./api/contacts/upload')));
 
 // ─── Campaigns ─────────────────────────────────────────────────────────────
-// CRÍTICO: las rutas planas /manage y /messages van ANTES de /:id para que
-// Express no las absorba como params.
+// CRÍTICO: las rutas planas /manage, /messages, /tick van ANTES de /:id para
+// que Express no las absorba como params.
 app.all('/api/campaigns',          adapt(require('./api/campaigns/index')));
 app.all('/api/campaigns/manage',   adapt(require('./api/campaigns/manage')));
 app.all('/api/campaigns/messages', adapt(require('./api/campaigns/messages')));
+app.all('/api/campaigns/tick',     adapt(require('./api/campaigns/tick')));
 app.all('/api/campaigns/:id',      adapt(require('./api/campaigns/[id]'), { id: 'id' }));
 
 // 404 explícito para /api/* no matcheado

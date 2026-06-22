@@ -514,6 +514,14 @@
             </div>
 
             <div class="form-group">
+                <label for="f-scheduled-for">
+                    Enviar el
+                    <span class="label-hint">vacío = ahora (máx ~5 min de latencia hasta que el worker la levante)</span>
+                </label>
+                <input type="datetime-local" id="f-scheduled-for" class="glass-select">
+            </div>
+
+            <div class="form-group">
                 <label>
                     Plantilla de WhatsApp
                     <button type="button" id="btn-load-templates" class="btn-inline">

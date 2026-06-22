@@ -192,4 +192,19 @@ $$;
 --   workspace_members(workspace_id, user_id, role) y reescribe las políticas
 --   RLS para que el acceso a contacts/campaigns/app_settings se base en
 --   membresía en lugar de user_id. Backfill del dueño actual como 'owner'.
+--
+-- 0003_template_media_storage.sql — bucket público "template-media" para
+--   imágenes de header de plantillas WhatsApp (5 MB, PNG/JPG). RLS para
+--   uploads via anon key gated por membresía. Lectura pública (Meta debe
+--   poder descargarlas sin auth).
+--   (Nota: el endpoint /api/uploads/image se añade en PR aparte. El bucket
+--   ya está creado en producción.)
+--
+-- 0004_workspace_members_rls_fix.sql — policy SELECT "self_membership" en
+--   workspace_members. Sin ella, los subqueries de policies de otras tablas
+--   devolvían 0 rows desde el browser y rompían el envío de campañas.
+--
+-- 0005_scheduling.sql — campaigns.scheduled_for + campaign_messages.claimed_at
+--   + RPCs claim_pending_messages / rescue_stuck_claims. Soporta el worker
+--   server-side que corre cada 1 min en Railway cron service.
 -- ──────────────────────────────────────────────────────────────────────────────
