@@ -84,3 +84,24 @@ const server = app.listen(port, () => {
 // Timeout defensivo. Vercel imponía 30s, en Railway no hay límite — pero
 // no queremos requests colgadas indefinidamente.
 server.setTimeout(60_000);
+
+// ─── Cron tick interno ─────────────────────────────────────────────────────
+// Reemplaza el Railway cron service que tenía problemas con startCommand vs
+// railway.json. Más simple: el web service corre el tick cada N segundos.
+// El handler usa un lock booleano interno (runningTick) para no solaparse.
+const TICK_INTERVAL_MS = Number(process.env.TICK_INTERVAL_MS || 60_000);
+if (TICK_INTERVAL_MS > 0 && process.env.NODE_ENV !== 'test') {
+    const { runTick } = require('./api/campaigns/tick');
+    setInterval(async () => {
+        try {
+            const out = await runTick();
+            if (out.skipped) return;          // no log si se saltó por overlap
+            if (out.campaignsProcessed > 0 || out.promoted > 0 || out.rescued > 0) {
+                console.log('[tick]', JSON.stringify(out));
+            }
+        } catch (err) {
+            console.error('[tick] error', err.message);
+        }
+    }, TICK_INTERVAL_MS);
+    console.log(`[tick] interval set to ${TICK_INTERVAL_MS}ms`);
+}
