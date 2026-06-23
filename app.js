@@ -354,6 +354,7 @@ function init() {
     setupConfig();
     setupCampaigns();
     setupContacts();
+    setupAnalytics();
     setupErrorsModal();
     loadCampaigns(); // cargar campañas al inicio (tab por defecto)
 }
@@ -372,15 +373,134 @@ function setupNavigation() {
             if (tab === 'campaigns') loadCampaigns();
             if (tab === 'contacts')  { loadContacts(); loadTagsFilter(); }
             if (tab === 'config')    loadConfig();
+            if (tab === 'analytics') loadMetrics();
         });
     });
 }
 
 // ═══════════════════════════════════════════════
-// ══ ANÁLISIS ══════════════════════════════════
+// ══ ANÁLISIS (Métricas) ═══════════════════════
 // ═══════════════════════════════════════════════
 
-function setupAnalytics() { /* módulo de análisis eliminado */ }
+let metricsState = {
+    preset:  '7d',   // 7d | 30d | 90d
+    groupBy: 'day',  // day | week | month
+};
+let metricsChart = null;
+
+function setupAnalytics() {
+    document.querySelectorAll('.metrics-preset').forEach(b => {
+        b.addEventListener('click', () => {
+            metricsState.preset = b.dataset.preset;
+            document.querySelectorAll('.metrics-preset').forEach(x => x.classList.remove('active'));
+            b.classList.add('active');
+            // El groupBy por default cambia con el preset para una vista lógica
+            const gb = b.dataset.preset === '90d' ? 'week' : 'day';
+            metricsState.groupBy = gb;
+            document.getElementById('metrics-groupby-select').value = gb;
+            loadMetrics();
+        });
+    });
+    document.getElementById('metrics-groupby-select').addEventListener('change', e => {
+        metricsState.groupBy = e.target.value;
+        loadMetrics();
+    });
+    document.getElementById('btn-refresh-metrics')?.addEventListener('click', loadMetrics);
+}
+
+async function loadMetrics() {
+    const tbody = document.getElementById('metrics-top-tbody');
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Cargando…</td></tr>';
+
+    const days = { '7d': 7, '30d': 30, '90d': 90 }[metricsState.preset] || 7;
+    const to   = new Date();
+    const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+
+    try {
+        const res = await authFetch(
+            `/api/metrics?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}&groupBy=${metricsState.groupBy}&topN=10`
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al cargar métricas');
+
+        renderMetricsKpis(data.totals);
+        renderMetricsTimeline(data.timeline, metricsState.groupBy);
+        renderMetricsTopTemplates(data.topTemplates);
+
+        // Banner si parece que el webhook no está configurado
+        const warn = document.getElementById('metrics-warning');
+        const noReceipts = data.totals.sent > 0 && data.totals.delivered === 0;
+        warn.style.display = noReceipts ? 'flex' : 'none';
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="3" class="empty-state" style="color:var(--accent-red)">Error: ${escHtml(err.message)}</td></tr>`;
+    }
+}
+
+function renderMetricsKpis(t) {
+    document.getElementById('metrics-kpi-sent').textContent      = (t.sent || 0).toLocaleString();
+    document.getElementById('metrics-kpi-delivery').textContent  = `${t.deliveryRate || 0}%`;
+    document.getElementById('metrics-kpi-read').textContent      = `${t.readRate || 0}%`;
+    document.getElementById('metrics-kpi-fail').textContent      = `${t.failRate || 0}%`;
+}
+
+function renderMetricsTimeline(rows, groupBy) {
+    const titles = { day: 'Envíos por día', week: 'Envíos por semana', month: 'Envíos por mes' };
+    document.getElementById('metrics-chart-title').textContent = titles[groupBy] || 'Envíos';
+    const empty = document.getElementById('metrics-chart-empty');
+    empty.style.display = rows.length === 0 ? 'inline' : 'none';
+
+    const fmt = (iso) => {
+        const d = new Date(iso);
+        if (groupBy === 'month') return d.toLocaleDateString('es', { month: 'short', year: '2-digit' });
+        if (groupBy === 'week')  return `Sem ${d.toLocaleDateString('es', { day: '2-digit', month: 'short' })}`;
+        return d.toLocaleDateString('es', { day: '2-digit', month: 'short' });
+    };
+
+    const labels = rows.map(r => fmt(r.period));
+    const colors = getThemeChartColors();
+    const canvas = document.getElementById('metrics-chart');
+
+    if (metricsChart) metricsChart.destroy();
+    metricsChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Enviados',   data: rows.map(r => r.sent),      backgroundColor: colors.sent },
+                { label: 'Entregados', data: rows.map(r => r.delivered), backgroundColor: colors.delivered },
+                { label: 'Leídos',     data: rows.map(r => r.read),      backgroundColor: colors.read },
+                { label: 'Fallidos',   data: rows.map(r => r.failed),    backgroundColor: colors.failed },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: colors.text } },
+                tooltip: { mode: 'index', intersect: false },
+            },
+            scales: {
+                x: { ticks: { color: colors.muted }, grid: { color: colors.grid } },
+                y: { ticks: { color: colors.muted }, grid: { color: colors.grid }, beginAtZero: true },
+            },
+        },
+    });
+}
+
+function renderMetricsTopTemplates(rows) {
+    const tbody = document.getElementById('metrics-top-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-state">Sin plantillas en este rango.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map(r => `
+        <tr>
+            <td style="padding:0.75rem 1rem;border-bottom:1px solid var(--border-soft)"><code style="background:var(--surface-soft);padding:0.15rem 0.4rem;border-radius:4px;font-size:var(--text-sm)">${escHtml(r.template)}</code></td>
+            <td style="padding:0.75rem 1rem;border-bottom:1px solid var(--border-soft);text-align:right;font-weight:600">${r.total.toLocaleString()}</td>
+            <td style="padding:0.75rem 1rem;border-bottom:1px solid var(--border-soft);text-align:right;color:var(--text-secondary)">${r.deliveryRate == null ? '—' : r.deliveryRate + '%'}</td>
+        </tr>
+    `).join('');
+}
 
 function parseDateStr(str) {
     if (!str) return null;

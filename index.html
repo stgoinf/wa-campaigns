@@ -134,6 +134,9 @@
             <a class="nav-item" data-tab="contacts">
                 <i class="ph ph-address-book"></i> Clientes
             </a>
+            <a class="nav-item" data-tab="analytics">
+                <i class="ph ph-chart-line-up"></i> Análisis
+            </a>
             <a class="nav-item" data-tab="config">
                 <i class="ph ph-gear"></i> Configuración
             </a>
@@ -401,6 +404,109 @@
                 <button id="btn-bulk-deselect" class="btn-ghost btn-sm">
                     <i class="ph ph-x"></i> Deseleccionar
                 </button>
+            </div>
+        </div>
+
+        <!-- ════════ Tab: Análisis ════════ -->
+        <div id="tab-analytics" class="tab-panel">
+            <header>
+                <div class="header-titles">
+                    <h1>Análisis</h1>
+                    <p>Volumen de envíos, tasas y rendimiento por plantilla</p>
+                </div>
+                <button class="btn-ghost btn-sm" id="btn-refresh-metrics" title="Actualizar">
+                    <i class="ph ph-arrows-clockwise"></i>
+                </button>
+            </header>
+
+            <!-- Filtros de rango y agrupación -->
+            <div class="glass-panel metrics-filters">
+                <div class="metrics-range-presets" role="group" aria-label="Rango">
+                    <button type="button" class="btn-page metrics-preset active" data-preset="7d">7 días</button>
+                    <button type="button" class="btn-page metrics-preset" data-preset="30d">30 días</button>
+                    <button type="button" class="btn-page metrics-preset" data-preset="90d">90 días</button>
+                </div>
+                <div class="metrics-groupby">
+                    <label for="metrics-groupby-select" class="dim">Agrupar por</label>
+                    <select id="metrics-groupby-select" class="glass-select" style="max-width:140px">
+                        <option value="day" selected>Día</option>
+                        <option value="week">Semana</option>
+                        <option value="month">Mes</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Banner si delivered=0 y sent>0 (webhook Meta no configurado) -->
+            <div id="metrics-warning" class="onboarding-banner" style="display:none">
+                <i class="ph ph-warning-circle onboarding-banner-icon"></i>
+                <div class="onboarding-banner-body">
+                    <strong>Tasas de entrega y lectura en 0</strong>
+                    <p>El webhook de Meta WhatsApp no está configurado, así que los receipts (delivered/read) no llegan. Los mensajes sí se envían correctamente — solo no podemos confirmar la entrega.</p>
+                </div>
+            </div>
+
+            <!-- KPI cards -->
+            <div class="kpi-cards">
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-icon"><i class="ph ph-paper-plane-tilt"></i></div>
+                    <div class="kpi-info">
+                        <p>Enviados</p>
+                        <h2 id="metrics-kpi-sent">—</h2>
+                    </div>
+                </div>
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-icon"><i class="ph ph-check-circle"></i></div>
+                    <div class="kpi-info">
+                        <p>Tasa entrega</p>
+                        <h2 id="metrics-kpi-delivery">—</h2>
+                    </div>
+                </div>
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-icon"><i class="ph ph-eye"></i></div>
+                    <div class="kpi-info">
+                        <p>Tasa lectura</p>
+                        <h2 id="metrics-kpi-read">—</h2>
+                    </div>
+                </div>
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-icon"><i class="ph ph-warning-circle"></i></div>
+                    <div class="kpi-info">
+                        <p>Tasa de fallo</p>
+                        <h2 id="metrics-kpi-fail">—</h2>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="glass-panel chart-wrapper" style="height:340px">
+                <div class="chart-header">
+                    <h2 id="metrics-chart-title">Envíos por día</h2>
+                    <span id="metrics-chart-empty" class="dim" style="display:none">Sin datos en el rango.</span>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="metrics-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Top templates -->
+            <div class="glass-panel">
+                <div class="table-header">
+                    <h2><i class="ph ph-trophy"></i> Top plantillas</h2>
+                </div>
+                <div class="table-container">
+                    <table id="metrics-top-templates" style="width:100%;border-collapse:collapse;font-size:var(--text-base)">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;padding:0.75rem 1rem;color:var(--text-secondary);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid var(--panel-border)">Plantilla</th>
+                                <th style="text-align:right;padding:0.75rem 1rem;color:var(--text-secondary);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid var(--panel-border)">Enviados</th>
+                                <th style="text-align:right;padding:0.75rem 1rem;color:var(--text-secondary);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid var(--panel-border)">% Entrega</th>
+                            </tr>
+                        </thead>
+                        <tbody id="metrics-top-tbody">
+                            <tr><td colspan="3" class="empty-state">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
