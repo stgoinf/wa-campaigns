@@ -205,6 +205,10 @@ $$;
 --   devolvían 0 rows desde el browser y rompían el envío de campañas.
 --
 -- 0005_scheduling.sql — campaigns.scheduled_for + campaign_messages.claimed_at
---   + RPCs claim_pending_messages / rescue_stuck_claims. Soporta el worker
---   server-side que corre cada 1 min en Railway cron service.
+--   + RPCs claim_pending_messages / rescue_stuck_claims. El worker corre
+--   como setInterval interno en server.js (cada 60s).
+--
+-- 0006_metrics.sql — RPCs metrics_timeline / metrics_top_templates + índice
+--   parcial en campaign_messages.sent_at. Alimenta GET /api/metrics y el tab
+--   "Análisis" en la app.
 -- ──────────────────────────────────────────────────────────────────────────────

@@ -1869,6 +1869,38 @@ input[type="checkbox"]#contacts-check-all {
 }
 
 /* ─────────────────────────────────────────────
+   Métricas (tab Análisis)
+───────────────────────────────────────────── */
+.metrics-filters {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+.metrics-range-presets {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+.metrics-preset {
+    cursor: pointer;
+    font-weight: 500;
+}
+.metrics-preset.active {
+    background: var(--brand-midnight);
+    color: #ffffff;
+    border-color: var(--brand-midnight);
+}
+.metrics-groupby {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* ─────────────────────────────────────────────
    Vista previa de plantilla (burbuja WhatsApp)
 ───────────────────────────────────────────── */
 .chat-bg {
