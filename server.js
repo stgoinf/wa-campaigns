@@ -90,7 +90,7 @@ server.setTimeout(60_000);
 // Reemplaza el Railway cron service que tenía problemas con startCommand vs
 // railway.json. Más simple: el web service corre el tick cada N segundos.
 // El handler usa un lock booleano interno (runningTick) para no solaparse.
-const TICK_INTERVAL_MS = Number(process.env.TICK_INTERVAL_MS || 60_000);
+const TICK_INTERVAL_MS = Number(process.env.TICK_INTERVAL_MS || 20_000);
 if (TICK_INTERVAL_MS > 0 && process.env.NODE_ENV !== 'test') {
     const { runTick } = require('./api/campaigns/tick');
     setInterval(async () => {
