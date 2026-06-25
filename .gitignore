@@ -1,5 +1,6 @@
 node_modules/
 *.csv
+.env
 .env.local
 .env*.local
 *.db
