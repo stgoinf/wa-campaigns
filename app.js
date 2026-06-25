@@ -2297,10 +2297,10 @@ async function showCampaignErrors(id, name) {
 
     const { data, error } = await sb
         .from('campaign_messages')
-        .select('telefono, error, updated_at')
+        .select('telefono, error, sent_at')
         .eq('campaign_id', id)
         .eq('status', 'failed')
-        .order('updated_at', { ascending: false });
+        .order('sent_at', { ascending: false });
 
     if (error) {
         document.getElementById('errors-list').innerHTML =
