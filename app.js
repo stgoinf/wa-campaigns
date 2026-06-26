@@ -1441,51 +1441,44 @@ function generateDynamicFields(template, prefill = null) {
         hasFields = true;
         const fmt        = headerComp.format;
         const mediaKey   = fmt.toLowerCase(); // 'image', 'video', 'document'
-        const iconCls    = fmt === 'IMAGE' ? 'ph-image' : fmt === 'VIDEO' ? 'ph-video' : 'ph-file';
-        const label      = fmt === 'IMAGE' ? 'imagen' : fmt === 'VIDEO' ? 'video' : 'documento';
-        const example    = fmt === 'IMAGE' ? 'jpg' : fmt === 'VIDEO' ? 'mp4' : 'pdf';
         const prefillUrl = prefillHeader?.parameters?.[0]?.[mediaKey]?.link || '';
 
-        container.insertAdjacentHTML('beforeend', `
-            <div class="form-group">
-                <label><i class="ph ${iconCls}"></i> URL del ${label} (encabezado)</label>
-                <input type="text" id="df-header-url" class="glass-select"
-                    placeholder="https://ejemplo.com/archivo.${example}"
-                    data-param-type="header" data-media-type="${mediaKey}"
-                    value="${escHtml(prefillUrl)}">
-                ${fmt === 'IMAGE' ? `
-                <div id="df-img-preview" class="img-preview" style="${prefillUrl ? 'display:block' : 'display:none'}">
-                    <img id="df-img-tag" src="${escHtml(prefillUrl)}" alt="Vista previa">
-                </div>` : ''}
-            </div>
-        `);
-
         if (fmt === 'IMAGE') {
-            const urlInput = document.getElementById('df-header-url');
-            const preview  = document.getElementById('df-img-preview');
-            const img      = document.getElementById('df-img-tag');
-
-            function toEmbedUrl(raw) {
-                // Google Drive: https://drive.google.com/file/d/FILE_ID/view  o  uc?id=FILE_ID
-                const driveFile = raw.match(/drive\.google\.com\/file\/d\/([^/?]+)/);
-                if (driveFile) return `https://drive.google.com/thumbnail?id=${driveFile[1]}&sz=w600`;
-                const driveUc = raw.match(/drive\.google\.com\/.*[?&]id=([^&]+)/);
-                if (driveUc) return `https://drive.google.com/thumbnail?id=${driveUc[1]}&sz=w600`;
-                return raw; // URL directa, la usamos tal cual
-            }
-
-            function applyPreview(raw) {
-                if (!raw) { preview.style.display = 'none'; return; }
-                img.src = toEmbedUrl(raw);
-                img.alt = 'Vista previa';
-                preview.style.display = 'block';
-                img.onerror = () => { img.alt = '⚠️ No se puede mostrar la imagen. Verifica la URL.'; };
-            }
-
-            // Aplicar al cargar si ya hay URL (prefill de campaña anterior)
-            if (urlInput.value.trim()) applyPreview(urlInput.value.trim());
-
-            urlInput.addEventListener('input', e => applyPreview(e.target.value.trim()));
+            container.insertAdjacentHTML('beforeend', `
+                <div class="form-group">
+                    <label><i class="ph ph-image"></i> Imagen del encabezado</label>
+                    <div class="csv-dropzone" id="df-img-dropzone">
+                        <i class="ph ph-image-square"></i>
+                        <p>Arrastra una imagen o haz click para subirla</p>
+                        <span>PNG o JPG · máx. 5MB</span>
+                    </div>
+                    <input type="file" id="df-img-input" accept="image/png,image/jpeg" hidden>
+                    <p id="df-img-status" class="df-img-status"></p>
+                    <div id="df-img-preview" class="img-preview" style="${prefillUrl ? 'display:block' : 'display:none'}">
+                        <img id="df-img-tag" src="${escHtml(prefillUrl)}" alt="Vista previa">
+                    </div>
+                    <input type="hidden" id="df-header-url" data-param-type="header" data-media-type="image" value="${escHtml(prefillUrl)}">
+                    <details class="df-url-fallback">
+                        <summary>Pegar URL en su lugar</summary>
+                        <input type="text" id="df-header-url-manual" class="glass-select"
+                            placeholder="https://ejemplo.com/imagen.jpg" value="${escHtml(prefillUrl)}">
+                    </details>
+                </div>
+            `);
+            setupHeaderImageDropzone();
+        } else {
+            const iconCls = fmt === 'VIDEO' ? 'ph-video' : 'ph-file';
+            const label   = fmt === 'VIDEO' ? 'video' : 'documento';
+            const example = fmt === 'VIDEO' ? 'mp4' : 'pdf';
+            container.insertAdjacentHTML('beforeend', `
+                <div class="form-group">
+                    <label><i class="ph ${iconCls}"></i> URL del ${label} (encabezado)</label>
+                    <input type="text" id="df-header-url" class="glass-select"
+                        placeholder="https://ejemplo.com/archivo.${example}"
+                        data-param-type="header" data-media-type="${mediaKey}"
+                        value="${escHtml(prefillUrl)}">
+                </div>
+            `);
         }
     }
 
@@ -1526,6 +1519,86 @@ function generateDynamicFields(template, prefill = null) {
     } else {
         container.style.display = 'none';
     }
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function setupHeaderImageDropzone() {
+    const dropzone    = document.getElementById('df-img-dropzone');
+    const fileInput   = document.getElementById('df-img-input');
+    const manualInput = document.getElementById('df-header-url-manual');
+    const hiddenUrl    = document.getElementById('df-header-url');
+    const preview      = document.getElementById('df-img-preview');
+    const img          = document.getElementById('df-img-tag');
+    const status       = document.getElementById('df-img-status');
+
+    function applyPreview(url) {
+        if (!url) { preview.style.display = 'none'; return; }
+        img.src   = url;
+        img.alt   = 'Vista previa';
+        img.onerror = () => { img.alt = '⚠️ No se puede mostrar la imagen.'; };
+        preview.style.display = 'block';
+    }
+
+    async function uploadHeaderImage(file) {
+        if (!['image/png', 'image/jpeg'].includes(file.type)) {
+            status.textContent = 'Formato no soportado. Usa PNG o JPG.';
+            status.className   = 'df-img-status df-img-status-error';
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            status.textContent = 'La imagen supera el límite de 5MB.';
+            status.className   = 'df-img-status df-img-status-error';
+            return;
+        }
+        status.textContent = 'Subiendo...';
+        status.className   = 'df-img-status';
+        try {
+            const dataB64 = await fileToBase64(file);
+            const res = await authFetch('/api/uploads/image', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ mime: file.type, dataB64 }),
+            });
+            const out = await res.json();
+            if (!res.ok) throw new Error(out.error || 'Error al subir la imagen');
+            hiddenUrl.value    = out.url;
+            manualInput.value  = '';
+            applyPreview(out.url);
+            status.textContent = 'Imagen subida ✓';
+            status.className   = 'df-img-status df-img-status-ok';
+        } catch (err) {
+            status.textContent = err.message;
+            status.className   = 'df-img-status df-img-status-error';
+        }
+    }
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dropzone-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dropzone-over'));
+    dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzone.classList.remove('dropzone-over');
+        const file = e.dataTransfer.files[0];
+        if (file) uploadHeaderImage(file);
+    });
+    fileInput.addEventListener('change', e => {
+        if (e.target.files[0]) uploadHeaderImage(e.target.files[0]);
+    });
+    manualInput.addEventListener('input', e => {
+        const url = e.target.value.trim();
+        hiddenUrl.value = url;
+        applyPreview(url);
+    });
+
+    if (hiddenUrl.value.trim()) applyPreview(hiddenUrl.value.trim());
 }
 
 function buildTemplateParams() {

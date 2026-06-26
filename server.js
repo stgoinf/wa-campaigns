@@ -51,6 +51,7 @@ app.all('/api/settings',        adapt(require('./api/settings')));
 app.all('/api/templates',       adapt(require('./api/templates')));
 app.all('/api/workspaces',      adapt(require('./api/workspaces')));
 app.all('/api/metrics',         adapt(require('./api/metrics')));
+app.all('/api/uploads/image',   adapt(require('./api/uploads/image')));
 
 // ─── Contacts ──────────────────────────────────────────────────────────────
 app.all('/api/contacts',        adapt(require('./api/contacts/index')));
