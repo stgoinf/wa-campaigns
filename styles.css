@@ -1240,6 +1240,26 @@ header p { color: var(--text-secondary); font-size: var(--text-base); line-heigh
     display: block;
 }
 
+.df-img-status {
+    font-size: 0.82rem;
+    margin: 0.4rem 0 0;
+    color: var(--text-secondary);
+}
+.df-img-status-ok    { color: var(--accent-green); }
+.df-img-status-error { color: var(--color-failed, #e5484d); }
+
+.df-url-fallback {
+    margin-top: 0.6rem;
+}
+.df-url-fallback summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+.df-url-fallback input {
+    margin-top: 0.5rem;
+}
+
 /* ─────────────────────────────────────────────
    Botón "Fallidos" clickeable en la tabla
 ───────────────────────────────────────────── */
