@@ -28,19 +28,44 @@ module.exports = async function handler(req, res) {
 
     const sb = adminClient();
 
+    const normalized = contacts.map(c => ({
+        telefono: String(c.telefono).replace(/\D/g, ''),
+        nombre:   c.nombre || null,
+        etiqueta: c.etiqueta || null,
+    })).filter(c => c.telefono.length >= 8);
+
     let inserted = 0;
-    for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
-        const batch = contacts.slice(i, i + BATCH_SIZE).map(c => {
-            const etiqueta = c.etiqueta || null;
+    for (let i = 0; i < normalized.length; i += BATCH_SIZE) {
+        const slice  = normalized.slice(i, i + BATCH_SIZE);
+        const phones = slice.map(c => c.telefono);
+
+        // Traer nombre/tags existentes para mezclarlos — el upsert no debe
+        // pisar tags previos con la etiqueta nueva del CSV ni borrar el
+        // nombre si esta fila no trae uno.
+        const { data: existing, error: exErr } = await sb
+            .from('contacts')
+            .select('telefono, nombre, tags')
+            .eq('workspace_id', workspaceId)
+            .in('telefono', phones);
+        if (exErr) return dbError(res, exErr);
+
+        const existingByPhone = new Map((existing || []).map(r => [r.telefono, r]));
+
+        const batch = slice.map(c => {
+            const prev    = existingByPhone.get(c.telefono);
+            const prevTags = prev?.tags || [];
+            const tags    = c.etiqueta && !prevTags.includes(c.etiqueta)
+                ? [...prevTags, c.etiqueta]
+                : prevTags;
             return {
-                telefono:     String(c.telefono).replace(/\D/g, ''),
-                nombre:       c.nombre || null,
-                etiqueta,
-                tags:         etiqueta ? [etiqueta] : [],
+                telefono:     c.telefono,
+                nombre:       c.nombre || prev?.nombre || null,
+                etiqueta:     tags[0] || null,
+                tags,
                 user_id:      userId,
                 workspace_id: workspaceId,
             };
-        }).filter(c => c.telefono.length >= 8);
+        });
 
         const { error } = await sb
             .from('contacts')
