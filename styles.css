@@ -1644,9 +1644,12 @@ input[type="checkbox"]#contacts-check-all {
 .tag-remove-btn:hover { opacity: 1; }
 
 /* ─── Bulk tag combo dropdown ────────────────────────────────────────────── */
+/* Abre hacia ARRIBA: .bulk-action-bar es position:fixed pegada al fondo del
+   viewport (bottom: 1.5rem), así que abrir hacia abajo deja casi sin
+   espacio y la lista se corta contra el borde de la ventana. */
 .bulk-tag-suggestions {
     position: absolute;
-    top: calc(100% + 4px);
+    bottom: calc(100% + 4px);
     left: 0;
     min-width: 200px;
     max-height: 200px;
