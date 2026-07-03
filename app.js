@@ -696,6 +696,7 @@ let cachedTemplates = [];   // plantillas cargadas desde Meta
 function setupConfig() {
     document.getElementById('form-config').addEventListener('submit', saveConfig);
     document.getElementById('btn-test-connection').addEventListener('click', testConnection);
+    document.getElementById('form-team-number').addEventListener('submit', submitTeamNumber);
 
     // Toggle visibilidad de token
     document.querySelectorAll('.password-toggle[data-target]').forEach(btn => {
@@ -726,6 +727,7 @@ async function loadConfig() {
         document.getElementById('cfg-token').placeholder      = data.wa_access_token      ? data.wa_access_token : 'EAABzA...';
         document.getElementById('cfg-phone-id').value          = data.wa_phone_number_id     || '';
         document.getElementById('cfg-business-id').value       = data.wa_business_account_id || '';
+        document.getElementById('cfg-include-team-numbers').checked = !!data.include_team_numbers;
 
         // Mostrar banner si faltan credenciales
         const missingCreds = !data.wa_phone_number_id || !data.wa_business_account_id;
@@ -737,6 +739,8 @@ async function loadConfig() {
                 'Actualizado: ' + new Date(data.wa_access_token_updated_at).toLocaleString('es');
         }
     } catch { /* backend no disponible */ }
+
+    loadTeamNumbers();
 }
 
 async function saveConfig(e) {
@@ -752,7 +756,8 @@ async function saveConfig(e) {
             body: JSON.stringify({
                 wa_access_token:        document.getElementById('cfg-token').value.trim()      || undefined,
                 wa_phone_number_id:     document.getElementById('cfg-phone-id').value.trim()   || undefined,
-                wa_business_account_id: document.getElementById('cfg-business-id').value.trim()|| undefined
+                wa_business_account_id: document.getElementById('cfg-business-id').value.trim()|| undefined,
+                include_team_numbers:   document.getElementById('cfg-include-team-numbers').checked
             })
         });
 
@@ -840,6 +845,97 @@ function showConfigMsg(type, text) {
     el.className      = `config-msg config-msg-${type}`;
     el.textContent    = text;
     el.style.display  = 'block';
+}
+
+// ── Números de equipo ──────────────────────────
+
+async function loadTeamNumbers() {
+    const list = document.getElementById('team-numbers-list');
+    try {
+        const res  = await authFetch('/api/team-numbers');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al cargar números de equipo');
+        renderTeamNumbersList(data.teamNumbers || []);
+    } catch {
+        list.innerHTML = '<p class="empty-state">Error al cargar números de equipo.</p>';
+    }
+}
+
+function renderTeamNumbersList(teamNumbers) {
+    const list = document.getElementById('team-numbers-list');
+    if (!teamNumbers.length) {
+        list.innerHTML = '<p class="empty-state">Aún no hay números de equipo agregados.</p>';
+        return;
+    }
+    list.innerHTML = teamNumbers.map(tn => `
+        <div class="template-card">
+            <div class="template-header">
+                <span class="template-name">${escHtml(tn.etiqueta)}</span>
+                <div class="template-meta">
+                    <span class="tag tag-lang">${escHtml(tn.telefono)}</span>
+                    <button class="icon-btn" onclick="removeTeamNumber(${tn.id})" title="Quitar" aria-label="Quitar">
+                        <i class="ph ph-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function submitTeamNumber(e) {
+    e.preventDefault();
+    const telefono = document.getElementById('tn-telefono').value.replace(/\D/g, '');
+    const etiqueta = document.getElementById('tn-etiqueta').value.trim();
+    const msgEl    = document.getElementById('team-number-msg');
+    const btn      = document.getElementById('btn-add-team-number');
+
+    if (telefono.length < 8) {
+        msgEl.className = 'config-msg config-msg-error';
+        msgEl.textContent = 'El teléfono debe tener al menos 8 dígitos.';
+        msgEl.style.display = 'block';
+        return;
+    }
+    if (!etiqueta) {
+        msgEl.className = 'config-msg config-msg-error';
+        msgEl.textContent = 'La etiqueta es obligatoria.';
+        msgEl.style.display = 'block';
+        return;
+    }
+    msgEl.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Agregando...';
+
+    try {
+        const res  = await authFetch('/api/team-numbers', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ telefono, etiqueta })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al agregar número');
+        document.getElementById('tn-telefono').value = '';
+        document.getElementById('tn-etiqueta').value = '';
+        await loadTeamNumbers();
+    } catch (err) {
+        msgEl.className = 'config-msg config-msg-error';
+        msgEl.textContent = err.message;
+        msgEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="ph ph-plus"></i> Agregar';
+    }
+}
+
+async function removeTeamNumber(id) {
+    if (!confirm('¿Quitar este número de equipo?')) return;
+    try {
+        const res  = await authFetch(`/api/team-numbers?id=${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al quitar número');
+        await loadTeamNumbers();
+    } catch (err) {
+        alert(err.message);
+    }
 }
 
 function setupCampaigns() {

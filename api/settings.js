@@ -25,15 +25,18 @@ module.exports = async function handler(req, res) {
             wa_access_token:            maskToken(settings.wa_access_token),
             wa_phone_number_id:         settings.wa_phone_number_id         || '',
             wa_business_account_id:     settings.wa_business_account_id     || '',
+            include_team_numbers:       settings.include_team_numbers       || false,
             wa_access_token_updated_at: settings.wa_access_token_updated_at || null,
         });
     }
 
     // ── POST ─────────────────────────────────────────────────────────────────
     if (req.method === 'POST') {
-        const { wa_access_token, wa_phone_number_id, wa_business_account_id } = req.body || {};
+        const { wa_access_token, wa_phone_number_id, wa_business_account_id, include_team_numbers } = req.body || {};
 
-        if (!wa_access_token && !wa_phone_number_id && !wa_business_account_id) {
+        const hasAnyField = wa_access_token || wa_phone_number_id || wa_business_account_id
+            || typeof include_team_numbers === 'boolean';
+        if (!hasAnyField) {
             return res.status(400).json({ error: 'No se recibió ningún campo para actualizar.' });
         }
 
@@ -46,6 +49,7 @@ module.exports = async function handler(req, res) {
             wa_access_token:        wa_access_token        || current.wa_access_token        || null,
             wa_phone_number_id:     wa_phone_number_id     || current.wa_phone_number_id     || null,
             wa_business_account_id: wa_business_account_id || current.wa_business_account_id || null,
+            include_team_numbers:   typeof include_team_numbers === 'boolean' ? include_team_numbers : current.include_team_numbers,
             updated_at:             new Date().toISOString(),
         };
 

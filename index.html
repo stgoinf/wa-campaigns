@@ -588,6 +588,44 @@
                 </form>
             </div>
 
+            <!-- Números de equipo -->
+            <div class="glass-panel config-card">
+                <div class="config-section-title">
+                    <i class="ph-fill ph-users-three"></i>
+                    <div>
+                        <h2>Números de equipo</h2>
+                        <p>Números de WhatsApp del equipo, no ligados a cuentas de usuario. Puedes incluirlos automáticamente en todas las campañas.</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:0.5rem;font-weight:normal">
+                        <input type="checkbox" id="cfg-include-team-numbers">
+                        Incluir números de equipo en las campañas
+                    </label>
+                    <small class="label-hint">Si está activo, estos números se agregan siempre como destinatarios de toda campaña nueva.</small>
+                </div>
+
+                <form id="form-team-number" class="form-row">
+                    <div class="form-group">
+                        <label for="tn-telefono">Teléfono</label>
+                        <input type="text" id="tn-telefono" class="glass-select" placeholder="18091234567" inputmode="numeric">
+                    </div>
+                    <div class="form-group">
+                        <label for="tn-etiqueta">Etiqueta</label>
+                        <input type="text" id="tn-etiqueta" class="glass-select" placeholder="Juan - Ventas">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn-test" id="btn-add-team-number">
+                            <i class="ph ph-plus"></i> Agregar
+                        </button>
+                    </div>
+                </form>
+                <p id="team-number-msg" class="config-msg" style="display:none"></p>
+
+                <div id="team-numbers-list" class="templates-list"></div>
+            </div>
+
             <!-- Plantillas disponibles -->
             <div class="glass-panel config-card" id="templates-panel" style="display:none">
                 <div class="config-section-title">
