@@ -870,8 +870,9 @@ function renderTeamNumbersList(teamNumbers) {
     list.innerHTML = teamNumbers.map(tn => `
         <div class="template-card">
             <div class="template-header">
-                <span class="template-name">${escHtml(tn.etiqueta)}</span>
+                <span class="template-name">${escHtml(tn.nombre)}</span>
                 <div class="template-meta">
+                    ${tn.etiqueta ? `<span class="tag tag-cat">${escHtml(tn.etiqueta)}</span>` : ''}
                     <span class="tag tag-lang">${escHtml(tn.telefono)}</span>
                     <button class="icon-btn" onclick="removeTeamNumber(${tn.id})" title="Quitar" aria-label="Quitar">
                         <i class="ph ph-trash"></i>
@@ -884,20 +885,21 @@ function renderTeamNumbersList(teamNumbers) {
 
 async function submitTeamNumber(e) {
     e.preventDefault();
+    const nombre   = document.getElementById('tn-nombre').value.trim();
     const telefono = document.getElementById('tn-telefono').value.replace(/\D/g, '');
     const etiqueta = document.getElementById('tn-etiqueta').value.trim();
     const msgEl    = document.getElementById('team-number-msg');
     const btn      = document.getElementById('btn-add-team-number');
 
-    if (telefono.length < 8) {
+    if (!nombre) {
         msgEl.className = 'config-msg config-msg-error';
-        msgEl.textContent = 'El teléfono debe tener al menos 8 dígitos.';
+        msgEl.textContent = 'El nombre es obligatorio.';
         msgEl.style.display = 'block';
         return;
     }
-    if (!etiqueta) {
+    if (telefono.length < 8) {
         msgEl.className = 'config-msg config-msg-error';
-        msgEl.textContent = 'La etiqueta es obligatoria.';
+        msgEl.textContent = 'El teléfono debe tener al menos 8 dígitos.';
         msgEl.style.display = 'block';
         return;
     }
@@ -909,18 +911,23 @@ async function submitTeamNumber(e) {
         const res  = await authFetch('/api/team-numbers', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ telefono, etiqueta })
+            body:    JSON.stringify({ nombre, telefono, etiqueta })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al agregar número');
+        document.getElementById('tn-nombre').value   = '';
         document.getElementById('tn-telefono').value = '';
         document.getElementById('tn-etiqueta').value = '';
-        await loadTeamNumbers();
     } catch (err) {
         msgEl.className = 'config-msg config-msg-error';
-        msgEl.textContent = err.message;
+        msgEl.textContent = err.message + ' Revisa la lista de abajo.';
         msgEl.style.display = 'block';
     } finally {
+        // Siempre se refresca desde el servidor, éxito o error — así la
+        // lista nunca queda desactualizada respecto a lo que realmente
+        // hay en la base (ej. un 409 de duplicado confirma que el
+        // número ya existe, y debe verse en la lista para no confundir).
+        await loadTeamNumbers();
         btn.disabled = false;
         btn.innerHTML = '<i class="ph ph-plus"></i> Agregar';
     }

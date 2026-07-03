@@ -606,19 +606,30 @@
                     <small class="label-hint">Si está activo, estos números se agregan siempre como destinatarios de toda campaña nueva.</small>
                 </div>
 
-                <form id="form-team-number" class="form-row">
-                    <div class="form-group">
-                        <label for="tn-telefono">Teléfono</label>
-                        <input type="text" id="tn-telefono" class="glass-select" placeholder="18091234567" inputmode="numeric">
+                <form id="form-team-number">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tn-nombre">Nombre</label>
+                            <input type="text" id="tn-nombre" class="glass-select" placeholder="Juan Pérez">
+                        </div>
+                        <div class="form-group">
+                            <label for="tn-telefono">Teléfono</label>
+                            <input type="text" id="tn-telefono" class="glass-select" placeholder="18091234567" inputmode="numeric">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="tn-etiqueta">Etiqueta</label>
-                        <input type="text" id="tn-etiqueta" class="glass-select" placeholder="Juan - Ventas">
-                    </div>
-                    <div class="form-group">
-                        <button type="submit" class="btn-test" id="btn-add-team-number">
-                            <i class="ph ph-plus"></i> Agregar
-                        </button>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tn-etiqueta">
+                                Etiqueta
+                                <span class="label-hint">Opcional — ej. "Ventas"</span>
+                            </label>
+                            <input type="text" id="tn-etiqueta" class="glass-select" placeholder="Ventas">
+                        </div>
+                        <div class="form-group" style="align-self:end">
+                            <button type="submit" class="btn-test" id="btn-add-team-number">
+                                <i class="ph ph-plus"></i> Agregar
+                            </button>
+                        </div>
                     </div>
                 </form>
                 <p id="team-number-msg" class="config-msg" style="display:none"></p>
