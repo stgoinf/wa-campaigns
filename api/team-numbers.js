@@ -26,18 +26,19 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'POST') {
         const telefono = String(req.body?.telefono || '').replace(/\D/g, '');
+        const nombre   = String(req.body?.nombre   || '').trim();
         const etiqueta = String(req.body?.etiqueta || '').trim();
 
         if (telefono.length < 8) {
             return res.status(400).json({ error: 'El teléfono debe tener al menos 8 dígitos.' });
         }
-        if (!etiqueta) {
-            return res.status(400).json({ error: 'La etiqueta es obligatoria (ej. "Juan - Ventas").' });
+        if (!nombre) {
+            return res.status(400).json({ error: 'El nombre es obligatorio (ej. "Juan Pérez").' });
         }
 
         const { data, error } = await sb
             .from('team_numbers')
-            .insert({ workspace_id: workspaceId, telefono, etiqueta })
+            .insert({ workspace_id: workspaceId, telefono, nombre, etiqueta: etiqueta || null })
             .select()
             .single();
 
