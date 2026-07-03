@@ -3,6 +3,7 @@
 
 const { adminClient, dbError } = require('../_lib/supabase');
 const { getUserId, getWorkspaceId } = require('../_lib/auth');
+const { getSettings } = require('../_lib/getSettings');
 
 module.exports = async function handler(req, res) {
     const userId = await getUserId(req);
@@ -65,6 +66,27 @@ module.exports = async function handler(req, res) {
             if (!page || page.length < PAGE) break;
             from += PAGE;
         }
+
+        // Números de equipo: si el workspace tiene el toggle activo, se
+        // agregan siempre como destinatarios adicionales (dedupe por
+        // teléfono contra los contactos ya incluidos).
+        const wsSettings = await getSettings(workspaceId);
+        if (wsSettings.include_team_numbers) {
+            const { data: teamNums, error: tnErr } = await sb
+                .from('team_numbers')
+                .select('telefono')
+                .eq('workspace_id', workspaceId);
+            if (tnErr) return dbError(res, tnErr);
+
+            const existing = new Set(contacts.map(c => c.telefono));
+            for (const tn of (teamNums || [])) {
+                if (!existing.has(tn.telefono)) {
+                    contacts.push({ telefono: tn.telefono });
+                    existing.add(tn.telefono);
+                }
+            }
+        }
+
         if (!contacts.length) return res.status(400).json({ error: 'No hay contactos para esta selección' });
 
         const { data: camp, error: campErr } = await sb

@@ -9,6 +9,7 @@ async function getSettings(workspaceId = null) {
         wa_access_token:        process.env.WA_ACCESS_TOKEN        || null,
         wa_phone_number_id:     process.env.WA_PHONE_NUMBER_ID     || null,
         wa_business_account_id: process.env.WA_BUSINESS_ACCOUNT_ID || null,
+        include_team_numbers:   false,
     };
 
     try {
@@ -28,6 +29,7 @@ async function getSettings(workspaceId = null) {
             wa_access_token:            data.wa_access_token        || fromEnv.wa_access_token,
             wa_phone_number_id:         data.wa_phone_number_id     || fromEnv.wa_phone_number_id,
             wa_business_account_id:     data.wa_business_account_id || fromEnv.wa_business_account_id,
+            include_team_numbers:       data.include_team_numbers ?? false,
             wa_access_token_updated_at: data.updated_at,
         };
     } catch {
