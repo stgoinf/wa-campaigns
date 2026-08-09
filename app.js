@@ -1611,6 +1611,38 @@ function generateDynamicFields(template, prefill = null) {
         });
     }
 
+    // ── Campos para botones dinámicos (COPY_CODE, URL con sufijo {{N}}) ──
+    // Meta rechaza el envío con (#131008) Required parameter is missing si
+    // el template tiene un botón COPY_CODE o una URL dinámica y no se manda
+    // su parámetro — no basta con header/body.
+    const btnsComp = components.find(c => c.type === 'BUTTONS');
+    const dynamicButtons = (btnsComp?.buttons || [])
+        .map((b, idx) => ({ ...b, idx }))
+        .filter(b => b.type === 'COPY_CODE' || (b.type === 'URL' && /\{\{\d+\}\}/.test(b.url || '')));
+
+    if (dynamicButtons.length) {
+        const prefillButtons = prefill?.filter(p => p.type === 'button') || [];
+        dynamicButtons.forEach(b => {
+            hasFields = true;
+            const subType    = b.type === 'COPY_CODE' ? 'copy_code' : 'url';
+            const defaultVal = b.example?.[0] || '';
+            const prefillBtn = prefillButtons.find(p => String(p.index) === String(b.idx));
+            const prefillVal = prefillBtn?.parameters?.[0]?.[subType === 'copy_code' ? 'coupon_code' : 'text'] || defaultVal;
+            const label = subType === 'copy_code'
+                ? `Código de cupón — botón "${b.text || 'Copiar código'}"`
+                : `Valor dinámico — botón "${b.text || 'URL'}"`;
+            container.insertAdjacentHTML('beforeend', `
+                <div class="form-group">
+                    <label><i class="ph ph-ticket"></i> ${escHtml(label)}</label>
+                    <input type="text" id="df-button-${b.idx}" class="glass-select"
+                        placeholder="${escHtml(defaultVal || 'Valor del botón')}"
+                        data-param-type="button" data-button-index="${b.idx}" data-button-subtype="${subType}"
+                        value="${escHtml(prefillVal)}">
+                </div>
+            `);
+        });
+    }
+
     if (hasFields) {
         const hint = prefill ? ' <span class="prefill-hint"><i class="ph ph-magic-wand"></i> Pre-llenado de campaña anterior</span>' : '';
         container.insertAdjacentHTML('afterbegin', `
@@ -1726,6 +1758,24 @@ function buildTemplateParams() {
             parameters: bodyInputs.map(inp => ({ type: 'text', text: inp.value.trim() }))
         });
     }
+
+    // Buttons dinámicos (COPY_CODE, URL con sufijo {{N}}) — un componente
+    // "button" por cada botón dinámico, con su índice de posición original.
+    document.querySelectorAll('[data-param-type="button"]').forEach(inp => {
+        const value = inp.value.trim();
+        if (!value) return;
+        const subType = inp.dataset.buttonSubtype; // 'copy_code' | 'url'
+        params.push({
+            type:     'button',
+            sub_type: subType,
+            index:    inp.dataset.buttonIndex,
+            parameters: [
+                subType === 'copy_code'
+                    ? { type: 'coupon_code', coupon_code: value }
+                    : { type: 'text', text: value }
+            ]
+        });
+    });
 
     return params;
 }
