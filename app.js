@@ -1970,6 +1970,7 @@ function setupContacts() {
     // Botones nuevos
     document.getElementById('btn-add-contact').addEventListener('click', openAddContactModal);
     document.getElementById('btn-download-template').addEventListener('click', downloadContactsTemplate);
+    document.getElementById('btn-export-contacts').addEventListener('click', exportAllContacts);
 
     // Modal agregar cliente
     document.getElementById('add-contact-close').addEventListener('click', closeAddContactModal);
@@ -2317,6 +2318,43 @@ function downloadContactsTemplate() {
     const a    = document.createElement('a'); a.href = url;
     a.download = 'plantilla_contactos.csv'; a.click();
     URL.revokeObjectURL(url);
+}
+
+async function exportAllContacts() {
+    const btn = document.getElementById('btn-export-contacts');
+    const originalHTML = btn.innerHTML;
+    btn.disabled  = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch ph-spin"></i> Descargando...';
+
+    try {
+        const res  = await authFetch('/api/contacts?all=true');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al exportar contactos');
+
+        const rows = (data.contacts || []).map(c => ({
+            telefono:       c.telefono,
+            nombre:         c.nombre || '',
+            etiqueta:       c.etiqueta || '',
+            tags:           (c.tags || []).join(' | '),
+            creado:         c.created_at    ? new Date(c.created_at).toLocaleString('es')    : '',
+            ultimo_envio:   c.last_sent_at  ? new Date(c.last_sent_at).toLocaleString('es')   : '',
+            ultima_plantilla: c.last_template || '',
+        }));
+
+        const csv  = Papa.unparse(rows);
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `contactos_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('Error al descargar contactos: ' + err.message);
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = originalHTML;
+    }
 }
 
 function openAddContactModal() {
