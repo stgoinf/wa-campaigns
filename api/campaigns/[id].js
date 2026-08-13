@@ -1,7 +1,7 @@
 // GET    /api/campaigns/[id]  → obtener una campaña (del workspace activo)
 // DELETE /api/campaigns/[id]  → eliminar (solo draft/paused)
 
-const { adminClient } = require('../_lib/supabase');
+const { adminClient, dbError } = require('../_lib/supabase');
 const { getUserId, getWorkspaceId } = require('../_lib/auth');
 
 module.exports = async function handler(req, res) {
@@ -30,6 +30,47 @@ module.exports = async function handler(req, res) {
         await sb.from('campaign_messages').delete().eq('campaign_id', id);
         await sb.from('campaigns').delete().eq('id', id).eq('workspace_id', workspaceId);
         return res.json({ deleted: true });
+    }
+
+    // PUT: editar una campaña 'scheduled' (nombre, fecha, plantilla+params,
+    // destinatarios). Recalcula campaign_messages vía RPC atómica — ver
+    // supabase/0011_edit_scheduled_campaign.sql.
+    if (req.method === 'PUT') {
+        const campaignId = Number(id);
+        if (!Number.isInteger(campaignId)) return res.status(400).json({ error: 'id de campaña inválido' });
+
+        const {
+            nombre, templateName, templateLanguage = 'es', templateParams = [],
+            source = 'all', etiqueta, scheduledFor,
+        } = req.body;
+        if (!nombre || !templateName) return res.status(400).json({ error: 'nombre y templateName son obligatorios' });
+
+        let scheduledAt = new Date();
+        if (scheduledFor) {
+            const parsed = new Date(scheduledFor);
+            if (isNaN(parsed.getTime())) return res.status(400).json({ error: 'scheduledFor inválido (debe ser ISO 8601).' });
+            scheduledAt = parsed;
+        }
+
+        const { data, error } = await sb.rpc('edit_scheduled_campaign', {
+            p_campaign_id:       campaignId,
+            p_workspace_id:      workspaceId,
+            p_nombre:            nombre,
+            p_scheduled_for:     scheduledAt.toISOString(),
+            p_template_name:     templateName,
+            p_template_language: templateLanguage,
+            p_template_params:   templateParams,
+            p_source:            source,
+            p_etiqueta:          etiqueta || null,
+        });
+
+        if (error) {
+            if (error.message === 'NOT_FOUND') return res.status(404).json({ error: 'No encontrada' });
+            if (error.message === 'CAMPAIGN_NOT_SCHEDULED') return res.status(409).json({ error: 'La campaña ya no está programada (probablemente ya empezó a enviarse). Refresca la lista.' });
+            if (error.message === 'NO_RECIPIENTS') return res.status(400).json({ error: 'No hay contactos para esta selección' });
+            return dbError(res, error);
+        }
+        return res.json(Array.isArray(data) ? data[0] : data);
     }
 
     res.status(405).end();

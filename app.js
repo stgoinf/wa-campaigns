@@ -295,6 +295,7 @@ let fpInstance        = null;
 let activeCampaignId  = null;
 let campaignRunning   = false;   // controla el loop de envío en el browser
 let realtimeChannel   = null;
+let editingCampaignId = null;    // null = modo creación; id = editando una campaña 'scheduled'
 
 const monthMap = {
     'ene':0,'feb':1,'mar':2,'abr':3,'may':4,'jun':5,
@@ -1066,6 +1067,7 @@ function renderCampaignsTable(campaigns) {
                 <td class="col-failed">${failedCell}</td>
                 <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
                 <td class="actions-cell">
+                    ${c.status === 'scheduled' ? `<button class="btn-icon-blue" onclick="openEditCampaignModal(${c.id})" title="Editar"><i class="ph ph-pencil-simple"></i></button>` : ''}
                     ${['draft','paused'].includes(c.status) ? `<button class="btn-icon-green" onclick="startCampaign(${c.id})" title="Iniciar"><i class="ph ph-play"></i></button>` : ''}
                     ${c.status === 'running' ? `<button class="btn-icon-warn" onclick="pauseCampaign(${c.id})" title="Pausar"><i class="ph ph-pause"></i></button>` : ''}
                     ${c.status !== 'running' ? `<button class="btn-icon-red" onclick="deleteCampaign(${c.id})" title="Eliminar"><i class="ph ph-trash"></i></button>` : ''}
@@ -1122,6 +1124,7 @@ function renderCampaignsTable(campaigns) {
                                 <td class="col-failed">${fc}</td>
                                 <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
                                 <td class="actions-cell">
+                                    ${c.status === 'scheduled' ? `<button class="btn-icon-blue" onclick="openEditCampaignModal(${c.id})" title="Editar"><i class="ph ph-pencil-simple"></i></button>` : ''}
                                     ${['draft','paused'].includes(c.status) ? `<button class="btn-icon-green" onclick="startCampaign(${c.id})" title="Iniciar"><i class="ph ph-play"></i></button>` : ''}
                                     ${c.status === 'running' ? `<button class="btn-icon-warn" onclick="pauseCampaign(${c.id})" title="Pausar"><i class="ph ph-pause"></i></button>` : ''}
                                     ${c.status !== 'running' ? `<button class="btn-icon-red" onclick="deleteCampaign(${c.id})" title="Eliminar"><i class="ph ph-trash"></i></button>` : ''}
@@ -1263,6 +1266,12 @@ function addFeedEntry(telefono, status, label) {
 // ── Modal nueva campaña ────────────────────────
 
 async function openCampaignModal() {
+    editingCampaignId = null;
+    document.getElementById('modal-campaign-title').innerHTML =
+        '<i class="ph ph-paper-plane-tilt"></i> Nueva Campaña';
+    document.getElementById('btn-submit-campaign').innerHTML =
+        '<i class="ph ph-paper-plane-tilt"></i> Crear Campaña';
+
     document.getElementById('modal-campaign').style.display = 'flex';
     await updateContactPreview();
     // Cargar plantillas automáticamente (o usar caché si ya están)
@@ -1272,6 +1281,63 @@ async function openCampaignModal() {
         loadTemplatesIntoModal();
     }
     loadRecentTemplates();
+}
+
+async function openEditCampaignModal(id) {
+    showLoader(true, 'Cargando campaña...');
+    try {
+        const res  = await authFetch(`/api/campaigns/${id}`);
+        const camp = await res.json();
+        showLoader(false);
+        if (!res.ok) return alert(camp.error || 'No se pudo cargar la campaña.');
+        if (camp.status !== 'scheduled') {
+            alert('Esta campaña ya no está programada (puede que ya haya empezado a enviarse). Se actualizará la lista.');
+            loadCampaigns();
+            return;
+        }
+
+        editingCampaignId = id;
+
+        document.getElementById('modal-campaign').style.display = 'flex';
+        document.getElementById('modal-campaign-title').innerHTML =
+            '<i class="ph ph-pencil-simple"></i> Editar Campaña';
+        document.getElementById('btn-submit-campaign').innerHTML =
+            '<i class="ph ph-floppy-disk"></i> Guardar Cambios';
+
+        document.getElementById('f-nombre').value = camp.nombre || '';
+        document.getElementById('f-scheduled-for').value =
+            camp.scheduled_for ? toLocalDatetimeInputValue(camp.scheduled_for) : '';
+
+        // source/etiqueta: columnas nuevas — NULL en campañas creadas antes
+        // de esta feature, se asume 'all' (no hay forma de recuperar
+        // retroactivamente qué filtro usaron).
+        const source = camp.source === 'etiqueta' ? 'etiqueta' : 'all';
+        document.getElementById('f-source').value = source;
+        if (source === 'etiqueta') {
+            document.getElementById('f-etiqueta-group').style.display = 'block';
+            await loadEtiquetasIntoSelect();
+            document.getElementById('f-etiqueta').value = camp.etiqueta || '';
+        } else {
+            document.getElementById('f-etiqueta-group').style.display = 'none';
+        }
+        await updateContactPreview();
+
+        // Plantilla + parámetros: reusa el prefill existente de
+        // selectTemplate/generateDynamicFields (mismo mecanismo que
+        // "reutilizar de campaña reciente"). cachedTemplates debe estar
+        // poblado antes de llamar a selectTemplate.
+        if (!cachedTemplates.length) {
+            await loadTemplatesIntoModal();
+        } else {
+            renderTemplateList(cachedTemplates);
+        }
+        selectTemplate(camp.template_name, camp.template_params);
+
+        loadRecentTemplates();
+    } catch (err) {
+        showLoader(false);
+        alert('Error al cargar la campaña: ' + err.message);
+    }
 }
 
 async function loadTemplatesIntoModal() {
@@ -1783,6 +1849,13 @@ function closeCampaignModal() {
     document.getElementById('modal-campaign').style.display = 'none';
     document.getElementById('form-campaign').reset();
     document.getElementById('f-etiqueta-group').style.display = 'none';
+
+    editingCampaignId = null;
+    document.getElementById('modal-campaign-title').innerHTML =
+        '<i class="ph ph-paper-plane-tilt"></i> Nueva Campaña';
+    document.getElementById('btn-submit-campaign').innerHTML =
+        '<i class="ph ph-paper-plane-tilt"></i> Crear Campaña';
+
     // Limpiar selección de plantilla y campos dinámicos
     document.querySelectorAll('.tl-item').forEach(i => {
         i.classList.remove('tl-selected');
@@ -1842,20 +1915,25 @@ async function submitCampaign(e) {
         scheduledFor = d.toISOString();
     }
 
-    showLoader(true, scheduledFor ? 'Programando campaña...' : 'Creando campaña...');
+    const isEditing = editingCampaignId != null;
+    const payload = {
+        nombre:           document.getElementById('f-nombre').value.trim(),
+        templateName,
+        templateLanguage: document.getElementById('f-language').value,
+        templateParams:   buildTemplateParams(),
+        source:           document.getElementById('f-source').value,
+        etiqueta:         document.getElementById('f-etiqueta').value.trim() || undefined,
+        scheduledFor,
+    };
+
+    showLoader(true, isEditing ? 'Guardando cambios...' : (scheduledFor ? 'Programando campaña...' : 'Creando campaña...'));
     try {
-        const res  = await authFetch('/api/campaigns', {
-            method: 'POST',
+        const url    = isEditing ? `/api/campaigns/${editingCampaignId}` : '/api/campaigns';
+        const method = isEditing ? 'PUT' : 'POST';
+        const res  = await authFetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                nombre:           document.getElementById('f-nombre').value.trim(),
-                templateName,
-                templateLanguage: document.getElementById('f-language').value,
-                templateParams:   buildTemplateParams(),
-                source:           document.getElementById('f-source').value,
-                etiqueta:         document.getElementById('f-etiqueta').value.trim() || undefined,
-                scheduledFor,
-            })
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         showLoader(false);
@@ -1866,6 +1944,17 @@ async function submitCampaign(e) {
         showLoader(false);
         alert('Error: ' + err.message);
     }
+}
+
+// Inversa de: new Date(<valor de input datetime-local>).toISOString()
+// Recibe un ISO UTC (ej. campaigns.scheduled_for) y devuelve el string
+// "YYYY-MM-DDTHH:mm" que <input type="datetime-local"> espera, en hora
+// LOCAL del navegador (no usar toISOString() acá, eso da UTC).
+function toLocalDatetimeInputValue(isoString) {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // ═══════════════════════════════════════════════

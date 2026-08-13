@@ -101,6 +101,8 @@ module.exports = async function handler(req, res) {
                 workspace_id:      workspaceId,
                 status:            'scheduled',
                 scheduled_for:     scheduledAt.toISOString(),
+                source,
+                etiqueta:          etiqueta || null,
             })
             .select()
             .single();
