@@ -44,6 +44,28 @@ module.exports = async function handler(req, res) {
             return res.json({ etiquetas: data || [] });
         }
 
+        // Export completo (sin paginar) para el botón "Descargar CSV" del
+        // módulo de Clientes — trae TODOS los contactos del workspace,
+        // ignorando filtros de búsqueda/etiqueta/rango.
+        if (req.query.all === 'true') {
+            const EXPORT_PAGE = 1000;
+            let contacts = [];
+            let from = 0;
+            while (true) {
+                const { data: page, error } = await sb
+                    .from('contacts')
+                    .select('telefono, nombre, etiqueta, tags, created_at, last_sent_at, last_template')
+                    .eq('workspace_id', workspaceId)
+                    .order('created_at', { ascending: false })
+                    .range(from, from + EXPORT_PAGE - 1);
+                if (error) return dbError(res, error);
+                if (page && page.length) contacts = contacts.concat(page);
+                if (!page || page.length < EXPORT_PAGE) break;
+                from += EXPORT_PAGE;
+            }
+            return res.json({ contacts });
+        }
+
         const page      = Math.max(1, parseInt(req.query.page  || '1'));
         const limit     = Math.min(100, Math.max(1, parseInt(req.query.limit || '50')));
         const search    = (req.query.search    || '').trim();
