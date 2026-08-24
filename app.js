@@ -997,10 +997,17 @@ async function loadCampaigns() {
     }
 }
 
+function formatCampaignSchedule(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('es', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+}
+
 function renderCampaignsTable(campaigns) {
     const tbody = document.getElementById('campaigns-tbody');
     if (!campaigns.length) {
-        tbody.innerHTML = `<tr><td colspan="9" style="padding:0;border:none">
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:0;border:none">
             <div class="onboarding-steps-wrap">
                 <p class="onboarding-steps-title"><i class="ph ph-rocket-launch"></i> ¡Empieza en 3 pasos!</p>
                 <div class="onboarding-steps">
@@ -1062,9 +1069,8 @@ function renderCampaignsTable(campaigns) {
                 <td><code>${escHtml(c.template_name)}</code></td>
                 <td>${c.total.toLocaleString()}</td>
                 <td class="col-sent">${c.enviados.toLocaleString()}</td>
-                <td class="col-delivered">${c.entregados.toLocaleString()}</td>
-                <td class="col-read">${c.leidos.toLocaleString()}</td>
                 <td class="col-failed">${failedCell}</td>
+                <td class="col-scheduled">${formatCampaignSchedule(c.scheduled_for)}</td>
                 <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
                 <td class="actions-cell">
                     ${c.status === 'scheduled' ? `<button class="btn-icon-blue" onclick="openEditCampaignModal(${c.id})" title="Editar"><i class="ph ph-pencil-simple"></i></button>` : ''}
@@ -1078,8 +1084,6 @@ function renderCampaignsTable(campaigns) {
             const gIdx       = groupIdx++;
             const totalSum   = group.reduce((s, c) => s + (c.total    || 0), 0);
             const enviadoSum = group.reduce((s, c) => s + (c.enviados  || 0), 0);
-            const entregSum  = group.reduce((s, c) => s + (c.entregados|| 0), 0);
-            const leidoSum   = group.reduce((s, c) => s + (c.leidos    || 0), 0);
             const fallidoSum = group.reduce((s, c) => s + (c.fallidos  || 0), 0);
             const template   = group[0].template_name;
             // Estado: si hay alguna running→running, si hay paused→paused, else el del primero
@@ -1100,14 +1104,13 @@ function renderCampaignsTable(campaigns) {
                 <td><code>${escHtml(template)}</code></td>
                 <td>${totalSum.toLocaleString()}</td>
                 <td class="col-sent">${enviadoSum.toLocaleString()}</td>
-                <td class="col-delivered">${entregSum.toLocaleString()}</td>
-                <td class="col-read">${leidoSum.toLocaleString()}</td>
                 <td class="col-failed">${fallidoSum > 0 ? fallidoSum.toLocaleString() : '0'}</td>
+                <td class="col-scheduled">—</td>
                 <td><span class="status-badge ${dominantStatus}">${statusLabel(dominantStatus)}</span></td>
                 <td class="actions-cell"></td>
             </tr>
             <tr class="campaign-group-detail" id="cg-detail-${gIdx}" style="display:none">
-                <td colspan="9" style="padding:0">
+                <td colspan="8" style="padding:0">
                     <table class="admin-table" style="margin:0;background:rgba(0,0,0,0.15)">
                         ${group.map(c => {
                             const sn = c.nombre.replace(/'/g, "\\'");
@@ -1119,9 +1122,8 @@ function renderCampaignsTable(campaigns) {
                                 <td><code style="font-size:0.75rem">${escHtml(c.template_name)}</code></td>
                                 <td>${c.total.toLocaleString()}</td>
                                 <td class="col-sent">${c.enviados.toLocaleString()}</td>
-                                <td class="col-delivered">${c.entregados.toLocaleString()}</td>
-                                <td class="col-read">${c.leidos.toLocaleString()}</td>
                                 <td class="col-failed">${fc}</td>
+                                <td class="col-scheduled">${formatCampaignSchedule(c.scheduled_for)}</td>
                                 <td><span class="status-badge ${c.status}">${statusLabel(c.status)}</span></td>
                                 <td class="actions-cell">
                                     ${c.status === 'scheduled' ? `<button class="btn-icon-blue" onclick="openEditCampaignModal(${c.id})" title="Editar"><i class="ph ph-pencil-simple"></i></button>` : ''}

@@ -729,9 +729,8 @@ header p { color: var(--text-secondary); font-size: var(--text-base); line-heigh
 }
 
 .col-sent      { color: var(--color-sent); }
-.col-delivered { color: var(--color-delivered); }
-.col-read      { color: var(--color-read); }
 .col-failed    { color: var(--color-failed); }
+.col-scheduled { color: var(--text-secondary); font-size: var(--text-sm); white-space: nowrap; }
 
 /* Columna de nombre de campaña — truncar si es muy largo */
 #campaigns-table td:first-child {
