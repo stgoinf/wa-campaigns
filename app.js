@@ -1692,8 +1692,15 @@ function generateDynamicFields(template, prefill = null) {
         const prefillButtons = prefill?.filter(p => p.type === 'button') || [];
         dynamicButtons.forEach(b => {
             hasFields = true;
-            const subType    = b.type === 'COPY_CODE' ? 'copy_code' : 'url';
-            const defaultVal = b.example?.[0] || '';
+            const subType = b.type === 'COPY_CODE' ? 'copy_code' : 'url';
+            // En URL dinámicas Meta devuelve en `example` la URL COMPLETA de
+            // ejemplo, pero al enviar solo se manda la parte variable (lo que
+            // reemplaza {{N}}). Se separa la base fija para no duplicarla.
+            const urlBase    = subType === 'url' ? (b.url || '').replace(/\{\{\d+\}\}.*$/, '') : '';
+            const example    = b.example?.[0] || '';
+            const defaultVal = subType === 'url'
+                ? (urlBase && example.startsWith(urlBase) ? example.slice(urlBase.length) : '')
+                : example;
             const prefillBtn = prefillButtons.find(p => String(p.index) === String(b.idx));
             const prefillVal = prefillBtn?.parameters?.[0]?.[subType === 'copy_code' ? 'coupon_code' : 'text'] || defaultVal;
             const label = subType === 'copy_code'
@@ -1705,9 +1712,18 @@ function generateDynamicFields(template, prefill = null) {
                     <input type="text" id="df-button-${b.idx}" class="glass-select"
                         placeholder="${escHtml(defaultVal || 'Valor del botón')}"
                         data-param-type="button" data-button-index="${b.idx}" data-button-subtype="${subType}"
+                        data-button-base="${escHtml(urlBase)}"
                         value="${escHtml(prefillVal)}">
+                    ${subType === 'url' ? `<small class="field-updated ctx-hint" id="df-button-${b.idx}-final">El botón abrirá: ${escHtml(urlBase)}${escHtml(prefillVal)}</small>` : ''}
                 </div>
             `);
+            if (subType === 'url') {
+                const inp   = document.getElementById(`df-button-${b.idx}`);
+                const final = document.getElementById(`df-button-${b.idx}-final`);
+                inp.addEventListener('input', () => {
+                    final.textContent = `El botón abrirá: ${urlBase}${inp.value.trim()}`;
+                });
+            }
         });
     }
 
@@ -1830,9 +1846,13 @@ function buildTemplateParams() {
     // Buttons dinámicos (COPY_CODE, URL con sufijo {{N}}) — un componente
     // "button" por cada botón dinámico, con su índice de posición original.
     document.querySelectorAll('[data-param-type="button"]').forEach(inp => {
-        const value = inp.value.trim();
-        if (!value) return;
         const subType = inp.dataset.buttonSubtype; // 'copy_code' | 'url'
+        let value = inp.value.trim();
+        // URL dinámica: si pegaron la URL completa, se envía solo la parte
+        // variable (Meta ya antepone la base fija del botón).
+        const base = inp.dataset.buttonBase || '';
+        if (subType === 'url' && base && value.startsWith(base)) value = value.slice(base.length);
+        if (!value) return;
         params.push({
             type:     'button',
             sub_type: subType,
